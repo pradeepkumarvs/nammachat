@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>NammaChat - Chennai Local Meetups</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
+import { getDatabase, ref, set, onValue, push, child, onChildAdded, onDisconnect, serverTimestamp, update, get } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyB_1D5besvJG-0rX-RrcZZMpee38qSEvLs",
+  authDomain: "namma-alu-chat.firebaseapp.com",
+  databaseURL: "https://namma-alu-chat-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "namma-alu-chat",
+  storageBucket: "namma-alu-chat.firebasestorage.app",
+  messagingSenderId: "630785828889",
+  appId: "1:630785828889:web:9802af1d64dc7d55312288",
+  measurementId: "G-HNB7SEWT57"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+const auth = getAuth(app);
+
+window.firebaseDB = db;
+window.firebaseAuth = auth;
+window.firebaseRef = ref;
+window.firebaseOnValue = onValue;
+window.firebasePush = push;
+window.firebaseChild = child;
+window.firebaseOnChildAdded = onChildAdded;
+window.firebaseOnDisconnect = onDisconnect;
+window.firebaseServerTimestamp = serverTimestamp;
+window.firebaseUpdate = update;
+window.firebaseGet = get;
+window.firebaseSet = set;
+window.firebaseCreateUser = createUserWithEmailAndPassword;
+window.firebaseSignIn = signInWithEmailAndPassword;
+window.firebaseOnAuthState = onAuthStateChanged;
+window.firebaseSignOut = signOut;
+window.firebaseUpdateProfile = updateProfile;
+
+window.addEventListener('DOMContentLoaded', initApp);
+</script>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin:0; padding:0; height:100%; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #f3f4f6; }
+#app { max-width:480px; margin:0 auto; height:100%; display:flex; flex-direction:column; position:relative; background:#ffffff; }
+.header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background: linear-gradient(90deg, #f59e0b, #d97706); color:#fff; font-weight:700; font-size:18px; position:sticky; top:0; z-index:50; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
+.header button { background:rgba(255,255,255,0.2); border:none; color:#fff; padding:6px 12px; border-radius:6px; font-weight:600; font-size:13px; cursor:pointer; backdrop-filter: blur(4px); }
+.header button:hover { background:rgba(255,255,255,0.35); }
+.header .logout-btn { background:rgba(255,255,255,0.25); font-size:12px; padding:5px 10px; }
+.screen { flex:1; overflow-y:auto; display:none; padding:16px; }
+.screen.active { display:flex; flex-direction:column; }
+.form-group { margin-bottom:16px; }
+label { display:block; font-weight:600; margin-bottom:6px; color:#374151; font-size:14px; }
+input, select { width:100%; padding:12px 14px; border:1px solid #d1d5db; border-radius:10px; font-size:15px; background:#fff; }
+input:focus, select:focus { outline:none; border-color:#f59e0b; }
+.btn-primary { width:100%; padding:14px; background: linear-gradient(90deg, #f59e0b, #d97706); color:#fff; border:none; border-radius:12px; font-size:16px; font-weight:700; cursor:pointer; box-shadow:0 4px 14px rgba(245,158,11,0.35); }
+.btn-primary:disabled { opacity:0.6; cursor:not-allowed; }
+.btn-secondary { width:100%; padding:12px; background:#f3f4f6; color:#374151; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer; margin-top:10px; }
+.tab-bar { display:flex; background:#f3f4f6; border-radius:10px; margin-bottom:18px; overflow:hidden; }
+.tab-bar button { flex:1; padding:10px; border:none; background:transparent; font-weight:700; color:#6b7280; cursor:pointer; }
+.tab-bar button.active { background:#fff; color:#d97706; box-shadow:0 2px 6px rgba(0,0,0,0.05); border-radius:10px; }
+#map-setup { width:100%; height:280px; border-radius:12px; margin-bottom:12px; border:1px solid #e5e7eb; }
+.user-card { display:flex; align-items:center; gap:12px; padding:14px; background:#fff; border:1px solid #e5e7eb; border-radius:12px; margin-bottom:10px; cursor:pointer; transition: transform .1s, box-shadow .1s; }
+.user-card:active { transform: scale(0.98); }
+.avatar { width:48px; height:48px; border-radius:50%; background: linear-gradient(135deg, #f59e0b, #d97706); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:18px; flex-shrink:0; }
+.user-info { flex:1; }
+.user-name { font-weight:700; color:#111827; font-size:15px; }
+.user-meta { color:#6b7280; font-size:13px; margin-top:2px; }
+.distance-badge { background:#fef3c7; color:#92400e; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:700; white-space:nowrap; }
+.chat-header { display:flex; align-items:center; gap:10px; padding-bottom:10px; border-bottom:1px solid #e5e7eb; margin-bottom:10px; }
+.chat-header .avatar { width:40px; height:40px; font-size:16px; }
+.chat-area { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-bottom:8px; }
+.message { max-width:80%; padding:10px 14px; border-radius:16px; font-size:14px; line-height:1.35; }
+.message.me { align-self:flex-end; background:#f59e0b; color:#fff; border-bottom-right-radius:4px; }
+.message.them { align-self:flex-start; background:#f3f4f6; color:#111827; border-bottom-left-radius:4px; }
+.message .ts { font-size:11px; opacity:0.7; margin-top:4px; display:block; }
+.chat-input-wrap { display:flex; gap:8px; padding-top:8px; border-top:1px solid #e5e7eb; }
+.chat-input-wrap input { flex:1; }
+.chat-input-wrap button { padding:12px 18px; background:#111827; color:#fff; border:none; border-radius:10px; font-weight:700; cursor:pointer; }
+.safety-bar { display:flex; gap:8px; margin-bottom:10px; }
+.safety-bar button { flex:1; padding:8px; border:1px solid #e5e7eb; background:#fff; border-radius:8px; font-size:12px; font-weight:600; color:#374151; cursor:pointer; }
+.safety-bar button.danger { color:#ef4444; border-color:#fecaca; background:#fef2f2; }
+.back-btn { background:transparent; border:none; color:#fff; font-size:20px; cursor:pointer; padding:0 4px; }
+.empty-state { text-align:center; color:#9ca3af; padding:40px 20px; }
+.reveal-banner { background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; padding:10px 14px; border-radius:10px; font-size:13px; display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.reveal-banner button { background:#059669; color:#fff; border:none; border-radius:6px; padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer; }
+.toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#111827; color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; z-index:100; opacity:0; pointer-events:none; transition: opacity .3s; }
+.toast.show { opacity:1; }
+.auth-hint { text-align:center; font-size:13px; color:#6b7280; margin-top:12px; }
+.auth-hint a { color:#d97706; font-weight:600; cursor:pointer; }
+.map-hint { font-size:12px; color:#6b7280; margin-bottom:12px; text-align:center; }
+.gps-btn { width:100%; padding:10px; background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; margin-bottom:12px; }
+.loc-info { background:#f3f4f6; padding:10px 14px; border-radius:8px; font-size:13px; color:#374151; margin-bottom:12px; word-break:break-all; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="header" id="header">
+    <span style="display:flex;align-items:center;gap:8px;"><button class="back-btn" id="backBtn" style="display:none;">&#8592;</button> NammaChat</span>
+    <div style="display:flex;gap:8px;">
+      <button id="spotlightBtn">Spotlight Pass (₹19)</button>
+      <button class="logout-btn" id="logoutBtn" style="display:none;">Logout</button>
+    </div>
+  </div>
+
+  <!-- Screen 0: Auth (Login / Signup) -->
+  <div class="screen active" id="screen-auth">
+    <h2 style="margin-bottom:4px; color:#111827;">Welcome to NammaChat</h2>
+    <p style="color:#6b7280; font-size:14px; margin-bottom:18px;">Meet people around your neighborhood in Chennai anonymously.</p>
+
+    <div class="tab-bar">
+      <button id="tabLogin" class="active">Login</button>
+      <button id="tabSignup">Sign Up</button>
+    </div>
+
+    <div id="loginForm">
+      <div class="form-group">
+        <label for="loginEmail">Email</label>
+        <input id="loginEmail" type="email" placeholder="you@example.com" />
+      </div>
+      <div class="form-group">
+        <label for="loginPassword">Password</label>
+        <input id="loginPassword" type="password" placeholder="Your password" />
+      </div>
+      <button class="btn-primary" id="btnLogin">Login</button>
+      <p class="auth-hint">Don't have an account? <a id="goSignup">Sign up</a></p>
+    </div>
+
+    <div id="signupForm" style="display:none;">
+      <div class="form-group">
+        <label for="suEmail">Email</label>
+        <input id="suEmail" type="email" placeholder="you@example.com" />
+      </div>
+      <div class="form-group">
+        <label for="suPassword">Password</label>
+        <input id="suPassword" type="password" placeholder="Min 6 characters" />
+      </div>
+      <div class="form-group">
+        <label for="suDisplayName">Display Name</label>
+        <input id="suDisplayName" type="text" placeholder="e.g., ChennaiVibe" maxlength="20" />
+      </div>
+      <div class="form-group">
+        <label for="suNeighborhood">Neighborhood</label>
+        <select id="suNeighborhood">
+          <option value="" disabled selected>Select your area</option>
+          <option>Velachery</option>
+          <option>Adyar</option>
+          <option>OMR</option>
+          <option>Anna Nagar</option>
+          <option>T Nagar</option>
+          <option>Mylapore</option>
+          <option>Besant Nagar</option>
+          <option>Thiruvanmiyur</option>
+          <option>Guindy</option>
+          <option>Kodambakkam</option>
+          <option>Chromepet</option>
+          <option>Pallikaranai</option>
+          <option>Perambur</option>
+          <option>Ambattur</option>
+          <option>Nungambakkam</option>
+          <option>Kilpauk</option>
+          <option>Porur</option>
+          <option>Madhavaram</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="suRadius">Distance Radius</label>
+        <select id="suRadius">
+          <option value="1">1 km</option>
+          <option value="3" selected>3 km</option>
+          <option value="5">5 km</option>
+          <option value="10">10 km</option>
+        </select>
+      </div>
+      <button class="btn-primary" id="btnSignup">Create Account</button>
+      <p class="auth-hint">Already have an account? <a id="goLogin">Login</a></p>
+    </div>
+
+    <p id="auth-status" style="font-size:12px; color:#ef4444; text-align:center; margin-top:10px;"></p>
+  </div>
+
+  <!-- Screen 1: Map / Location Setup -->
+  <div class="screen" id="screen-mapsetup">
+    <h3 style="margin-bottom:6px; color:#111827;">Set Your Location</h3>
+    <p class="map-hint">Tap anywhere on the map or use GPS to place your pin.</p>
+
+    <div id="map-setup"></div>
+    <div class="loc-info" id="locInfo">No location selected yet.</div>
+
+    <button class="gps-btn" id="btnUseGPS"><span style="font-size:16px;">&#127758;</span> Use My Current GPS Location</button>
+
+    <div class="form-group">
+      <label for="mapRadius">Distance Radius</label>
+      <select id="mapRadius">
+        <option value="1">1 km</option>
+        <option value="3" selected>3 km</option>
+        <option value="5">5 km</option>
+        <option value="10">10 km</option>
+      </select>
+    </div>
+
+    <button class="btn-primary" id="btnConfirmLoc">Confirm Location & Find People</button>
+    <p id="map-status" style="font-size:12px; color:#ef4444; text-align:center; margin-top:10px;"></p>
+  </div>
+
+  <!-- Screen 2: Nearby Users -->
+  <div class="screen" id="screen-users">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+      <h3 style="margin:0; color:#111827;">People Near You</h3>
+      <button class="btn-secondary" id="btnChangeLoc" style="width:auto;padding:6px 12px;margin:0;font-size:12px;">Change Location</button>
+    </div>
+    <p style="font-size:13px; color:#6b7280; margin-bottom:14px;">Filtered by your radius. Tap to chat anonymously.</p>
+    <div id="users-list"></div>
+  </div>
+
+  <!-- Screen 3: Chat -->
+  <div class="screen" id="screen-chat">
+    <div class="chat-header" id="chatHeader"></div>
+    <div class="safety-bar">
+      <button id="btnReveal">Request Profile Reveal</button>
+      <button class="danger" id="btnReport">Report</button>
+      <button class="danger" id="btnBlock">Block</button>
+    </div>
+    <div id="revealBanner"></div>
+    <div class="chat-area" id="chatArea"></div>
+    <div class="chat-input-wrap">
+      <input id="msgInput" type="text" placeholder="Type a message..." />
+      <button id="btnSend">Send</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* === UTILITIES === */
+const $ = id => document.getElementById(id);
+const showToast = text => {
+  const t = $('toast'); t.textContent = text; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+};
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+/* === APP STATE === */
+const state = {
+  me: null, // { uid, name, area, lat, lng, radius, spotlight, email }
+  map: null, circle: null, pin: null,
+  users: [],
+  activeChatUid: null,
+  blocked: new Set(JSON.parse(localStorage.getItem('namma_blocked')||'[]')),
+  revealRequests: new Set(JSON.parse(localStorage.getItem('namma_reveals')||'[]')),
+  presenceRef: null,
+  authUid: null,
+};
+
+/* === SCREEN NAVIGATION === */
+function showScreen(name) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  $(`screen-${name}`).classList.add('active');
+  const onAuth = name !== 'auth';
+  $('backBtn').style.display = (onAuth && name !== 'users') ? 'inline-block' : 'none';
+  $('logoutBtn').style.display = onAuth ? 'inline-block' : 'none';
+}
+$('backBtn').onclick = () => {
+  if ($('screen-chat').classList.contains('active')) showScreen('users');
+  else if ($('screen-mapsetup').classList.contains('active')) { /* stay or go to users if has loc */ }
+  else showScreen('users');
+};
+
+/* === MAP SETUP === */
+function initMap() {
+  if (state.map) return;
+  state.map = L.map('map-setup', { zoomControl: false }).setView([13.0827, 80.2707], 12);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(state.map);
+  L.control.zoom({ position: 'bottomright' }).addTo(state.map);
+
+  state.map.on('click', e => {
+    const { lat, lng } = e.latlng;
+    state.me = state.me || {};
+    state.me.lat = lat;
+    state.me.lng = lng;
+    updateMapCircle(lat, lng, parseFloat($('mapRadius').value));
+    $('locInfo').textContent = `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`;
+    $('map-status').textContent = '';
+  });
+}
+
+function updateMapCircle(lat, lng, radiusKm) {
+  if (!state.map) initMap();
+  if (state.pin) state.map.removeLayer(state.pin);
+  if (state.circle) state.map.removeLayer(state.circle);
+  state.pin = L.marker([lat, lng]).addTo(state.map).bindPopup('You are here').openPopup();
+  state.circle = L.circle([lat, lng], { radius: radiusKm*1000, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.25, weight: 2 }).addTo(state.map);
+  state.map.fitBounds(state.circle.getBounds(), { padding: [20,20] });
+}
+
+/* === GEOLOCATION === */
+function getLocation() {
+  return new Promise((res, rej) => {
+    if (!navigator.geolocation) return rej('Geolocation not supported.');
+    navigator.geolocation.getCurrentPosition(
+      pos => res({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      err => rej(err.message || 'Location access denied.'),
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  });
+}
+
+/* === FIREBASE / PRESENCE === */
+function presenceKey(uid) { return `presence/${uid}`; }
+function userProfileKey(uid) { return `users/${uid}`; }
+function chatKey(a, b) { return a < b ? `chats/${a}_${b}` : `chats/${b}_${a}`; }
+
+function setPresence(user) {
+  const pRef = window.firebaseRef(window.firebaseDB, presenceKey(user.uid));
+  window.firebaseSet(pRef, { name: user.name, area: user.area, lat: user.lat, lng: user.lng, radius: user.radius, spotlight: user.spotlight||false, online: true, ts: Date.now() });
+  const disc = window.firebaseOnDisconnect(pRef);
+  disc.update({ online: false, ts: Date.now() });
+  state.presenceRef = pRef;
+}
+
+function saveUserProfile(user) {
+  const uRef = window.firebaseRef(window.firebaseDB, userProfileKey(user.uid));
+  window.firebaseSet(uRef, { name: user.name, area: user.area, radius: user.radius, spotlight: user.spotlight||false, lat: user.lat, lng: user.lng, email: user.email, ts: Date.now() });
+}
+
+function loadUserProfile(uid) {
+  return window.firebaseGet(window.firebaseRef(window.firebaseDB, userProfileKey(uid))).then(snap => snap.val());
+}
+
+function listenNearby() {
+  const presRef = window.firebaseRef(window.firebaseDB, 'presence');
+  window.firebaseOnValue(presRef, snap => {
+    const all = snap.val() || {};
+    const arr = [];
+    Object.entries(all).forEach(([uid, data]) => {
+      if (uid === state.me.uid) return;
+      if (state.blocked.has(uid)) return;
+      if (!data.lat || !data.lng || !state.me.lat || !state.me.lng) return;
+      const d = haversine(state.me.lat, state.me.lng, data.lat, data.lng);
+      if (d <= state.me.radius) arr.push({ uid, ...data, distanceKm: d });
+    });
+    arr.sort((a,b) => a.distanceKm - b.distanceKm);
+    state.users = arr;
+    renderUsers();
+  });
+}
+
+function renderUsers() {
+  const box = $('users-list');
+  if (!state.users.length) {
+    box.innerHTML = `<div class="empty-state">No one nearby right now.<br><span style="font-size:13px;">Try increasing your radius.</span></div>`; return;
+  }
+  box.innerHTML = state.users.map(u => {
+    const spotlight = u.spotlight ? ' <span style="color:#f59e0b;">★</span>' : '';
+    return `<div class="user-card" data-uid="${u.uid}">
+      <div class="avatar">${u.name ? u.name[0].toUpperCase() : '?'}</div>
+      <div class="user-info">
+        <div class="user-name">${u.name}${spotlight}</div>
+        <div class="user-meta">${u.area} · ${u.online ? '<span style="color:#059669;">Online</span>' : 'Offline'}</div>
+      </div>
+      <div class="distance-badge">${u.distanceKm.toFixed(1)} km</div>
+    </div>`;
+  }).join('');
+  document.querySelectorAll('.user-card').forEach(card => {
+    card.onclick = () => openChat(card.dataset.uid);
+  });
+}
+
+/* === CHAT === */
+let chatListenerOff = null;
+let revealListenerOff = null;
+
+function openChat(uid) {
+  state.activeChatUid = uid;
+  const them = state.users.find(u => u.uid === uid) || { name: 'User' };
+  $('chatHeader').innerHTML = `<div class="avatar">${them.name ? them.name[0].toUpperCase() : '?'}</div><div><div style="font-weight:700;">${them.name}</div><div style="font-size:12px;color:#6b7280;">${them.online ? 'Online' : 'Offline'}</div></div>`;
+  $('chatArea').innerHTML = '';
+  $('revealBanner').innerHTML = '';
+  showScreen('chat');
+  $('msgInput').focus();
+
+  if (chatListenerOff) { chatListenerOff(); chatListenerOff = null; }
+  if (revealListenerOff) { revealListenerOff(); revealListenerOff = null; }
+
+  const chatPath = chatKey(state.me.uid, uid);
+  const messagesRef = window.firebaseRef(window.firebaseDB, chatPath + '/messages');
+  chatListenerOff = window.firebaseOnChildAdded(messagesRef, snap => {
+    const m = snap.val();
+    if (!m) return;
+    appendMessage(m);
+  });
+
+  const rid = [state.me.uid, uid].sort().join('_');
+  if (state.revealRequests.has(rid)) renderRevealBanner('pending');
+
+  const revealRef = window.firebaseRef(window.firebaseDB, chatPath + '/reveal');
+  revealListenerOff = window.firebaseOnValue(revealRef, snap => {
+    const val = snap.val();
+    if (!val) return;
+    if (val.from === uid && val.to === state.me.uid) {
+      if (val.status === 'requested') renderRevealBanner('incoming', uid);
+      if (val.status === 'accepted') renderRevealBanner('accepted', uid);
+    }
+    if (val.from === state.me.uid && val.to === uid && val.status === 'accepted') {
+      renderRevealBanner('accepted');
+    }
+  });
+}
+
+function appendMessage(m) {
+  const div = document.createElement('div');
+  div.className = 'message ' + (m.from === state.me.uid ? 'me' : 'them');
+  const time = new Date(m.ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
+  div.innerHTML = `<div>${escapeHtml(m.text)}</div><span class="ts">${time}</span>`;
+  $('chatArea').appendChild(div);
+  $('chatArea').scrollTop = $('chatArea').scrollHeight;
+}
+function escapeHtml(t) { return t.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function sendMessage() {
+  const text = $('msgInput').value.trim();
+  if (!text || !state.activeChatUid) return;
+  const chatPath = chatKey(state.me.uid, state.activeChatUid);
+  const msgRef = window.firebaseRef(window.firebaseDB, chatPath + '/messages');
+  window.firebasePush(msgRef, { from: state.me.uid, text, ts: Date.now() });
+  $('msgInput').value = '';
+}
+$('btnSend').onclick = sendMessage;
+$('msgInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
+
+/* === REVEAL === */
+function renderRevealBanner(mode, fromUid) {
+  const banner = $('revealBanner');
+  if (mode === 'pending') {
+    banner.innerHTML = `<span>Reveal request sent. Waiting for response...</span>`;
+  } else if (mode === 'incoming') {
+    banner.innerHTML = `<span>They want to reveal profiles.</span><button id="btnAcceptReveal">Accept</button>`;
+    $('btnAcceptReveal').onclick = () => acceptReveal(fromUid);
+  } else if (mode === 'accepted') {
+    banner.innerHTML = `<span>Profiles revealed! You can now see real names.</span>`;
+  }
+}
+function requestReveal() {
+  if (!state.activeChatUid) return;
+  const rid = [state.me.uid, state.activeChatUid].sort().join('_');
+  state.revealRequests.add(rid);
+  localStorage.setItem('namma_reveals', JSON.stringify([...state.revealRequests]));
+  const chatPath = chatKey(state.me.uid, state.activeChatUid);
+  window.firebaseUpdate(window.firebaseRef(window.firebaseDB, chatPath + '/reveal'), { from: state.me.uid, to: state.activeChatUid, status: 'requested', ts: Date.now() });
+  renderRevealBanner('pending');
+  showToast('Profile reveal requested');
+}
+function acceptReveal(fromUid) {
+  const chatPath = chatKey(state.me.uid, fromUid);
+  window.firebaseUpdate(window.firebaseRef(window.firebaseDB, chatPath + '/reveal'), { from: state.me.uid, to: fromUid, status: 'accepted', ts: Date.now() });
+  renderRevealBanner('accepted');
+  showToast('Profile revealed');
+}
+$('btnReveal').onclick = requestReveal;
+
+/* === SAFETY === */
+$('btnBlock').onclick = () => {
+  if (!state.activeChatUid) return;
+  if (!confirm('Block this user? You won\'t see them again.')) return;
+  state.blocked.add(state.activeChatUid);
+  localStorage.setItem('namma_blocked', JSON.stringify([...state.blocked]));
+  showToast('User blocked');
+  showScreen('users');
+};
+$('btnReport').onclick = () => {
+  if (!state.activeChatUid) return;
+  const reason = prompt('Report reason (spam / abuse / other):');
+  if (!reason) return;
+  const reportRef = window.firebaseRef(window.firebaseDB, 'reports/' + Date.now());
+  window.firebaseSet(reportRef, { reporter: state.me.uid, reported: state.activeChatUid, reason, ts: Date.now() });
+  showToast('Report submitted. Thank you.');
+};
+
+/* === SPOTLIGHT / RAZORPAY === */
+$('spotlightBtn').onclick = () => {
+  if (!state.me) { showToast('Complete setup first'); return; }
+  const options = {
+    key: 'rzp_test_dummyKeyForDemo',
+    amount: 1900,
+    currency: 'INR',
+    name: 'NammaChat',
+    description: 'Spotlight Pass - Boost visibility across Chennai',
+    image: '',
+    handler: function (response) {
+      state.me.spotlight = true;
+      setPresence(state.me);
+      saveUserProfile(state.me);
+      showToast('Spotlight activated! Your profile is now boosted.');
+    },
+    prefill: { name: state.me?.name || '' },
+    theme: { color: '#f59e0b' }
+  };
+  try {
+    const rzp = new Razorpay(options);
+    rzp.open();
+  } catch (e) {
+    showToast('Razorpay SDK error (demo key). In production, use real key.');
+    console.error(e);
+  }
+};
+
+/* === AUTH HANDLERS === */
+function showAuthTab(tab) {
+  if (tab === 'login') {
+    $('loginForm').style.display = 'block';
+    $('signupForm').style.display = 'none';
+    $('tabLogin').classList.add('active');
+    $('tabSignup').classList.remove('active');
+  } else {
+    $('loginForm').style.display = 'none';
+    $('signupForm').style.display = 'block';
+    $('tabLogin').classList.remove('active');
+    $('tabSignup').classList.add('active');
+  }
+  $('auth-status').textContent = '';
+}
+$('tabLogin').onclick = () => showAuthTab('login');
+$('tabSignup').onclick = () => showAuthTab('signup');
+$('goSignup').onclick = () => showAuthTab('signup');
+$('goLogin').onclick = () => showAuthTab('login');
+
+$('btnLogin').onclick = async () => {
+  const email = $('loginEmail').value.trim();
+  const password = $('loginPassword').value;
+  const status = $('auth-status');
+  if (!email || !password) { status.textContent = 'Enter email and password.'; return; }
+  status.style.color = '#059669';
+  status.textContent = 'Logging in...';
+  try {
+    await window.firebaseSignIn(window.firebaseAuth, email, password);
+    status.textContent = '';
+  } catch (err) {
+    status.style.color = '#ef4444';
+    status.textContent = err.message;
+  }
+};
+
+$('btnSignup').onclick = async () => {
+  const email = $('suEmail').value.trim();
+  const password = $('suPassword').value;
+  const name = $('suDisplayName').value.trim();
+  const area = $('suNeighborhood').value;
+  const radius = parseFloat($('suRadius').value);
+  const status = $('auth-status');
+
+  if (!email || !password || !name || !area) { status.style.color='#ef4444'; status.textContent = 'Fill all fields.'; return; }
+  if (password.length < 6) { status.style.color='#ef4444'; status.textContent = 'Password must be 6+ characters.'; return; }
+
+  status.style.color = '#059669';
+  status.textContent = 'Creating account...';
+  try {
+    const cred = await window.firebaseCreateUser(window.firebaseAuth, email, password);
+    const uid = cred.user.uid;
+    await window.firebaseUpdateProfile(cred.user, { displayName: name });
+    // Save profile to DB (location will be set next screen)
+    const profile = { uid, email, name, area, radius, spotlight: false, lat: null, lng: null };
+    await window.firebaseSet(window.firebaseRef(window.firebaseDB, userProfileKey(uid)), profile);
+    status.textContent = '';
+    // Handled by onAuthStateChanged
+  } catch (err) {
+    status.style.color = '#ef4444';
+    status.textContent = err.message;
+  }
+};
+
+$('logoutBtn').onclick = async () => {
+  if (state.presenceRef) {
+    await window.firebaseUpdate(state.presenceRef, { online: false, ts: Date.now() });
+  }
+  await window.firebaseSignOut(window.firebaseAuth);
+  state.me = null;
+  state.authUid = null;
+  state.users = [];
+  if (state.map) { state.map.remove(); state.map = null; state.pin = null; state.circle = null; }
+  showScreen('auth');
+  showAuthTab('login');
+  showToast('Logged out');
+};
+
+/* === MAP / LOCATION SETUP === */
+$('btnUseGPS').onclick = async () => {
+  const status = $('map-status');
+  status.style.color = '#059669';
+  status.textContent = 'Getting GPS location...';
+  try {
+    const loc = await getLocation();
+    state.me = state.me || {};
+    state.me.lat = loc.lat;
+    state.me.lng = loc.lng;
+    const r = parseFloat($('mapRadius').value);
+    updateMapCircle(loc.lat, loc.lng, r);
+    $('locInfo').textContent = `Lat: ${loc.lat.toFixed(5)}, Lng: ${loc.lng.toFixed(5)} (GPS)`;
+    status.textContent = 'GPS location set!';
+  } catch (err) {
+    status.style.color = '#ef4444';
+    status.textContent = 'GPS error: ' + err;
+  }
+};
+
+$('mapRadius').addEventListener('change', () => {
+  if (!state.me || !state.me.lat) return;
+  const r = parseFloat($('mapRadius').value);
+  updateMapCircle(state.me.lat, state.me.lng, r);
+});
+
+$('btnConfirmLoc').onclick = async () => {
+  if (!state.me || !state.me.lat || !state.me.lng) {
+    $('map-status').style.color = '#ef4444';
+    $('map-status').textContent = 'Please select a location on the map or use GPS.';
+    return;
+  }
+  const radius = parseFloat($('mapRadius').value);
+  state.me.radius = radius;
+  // Update profile in DB
+  await window.firebaseUpdate(window.firebaseRef(window.firebaseDB, userProfileKey(state.me.uid)), { lat: state.me.lat, lng: state.me.lng, radius });
+  setPresence(state.me);
+  listenNearby();
+  showScreen('users');
+};
+
+$('btnChangeLoc').onclick = () => {
+  showScreen('mapsetup');
+  initMap();
+  if (state.me && state.me.lat) {
+    updateMapCircle(state.me.lat, state.me.lng, state.me.radius);
+    $('locInfo').textContent = `Lat: ${state.me.lat.toFixed(5)}, Lng: ${state.me.lng.toFixed(5)}`;
+    $('mapRadius').value = state.me.radius;
+  }
+};
+
+/* === APP INIT === */
+function initApp() {
+  initMap();
+  if (state.map) state.map.setView([13.0827, 80.2707], 12);
+
+  window.firebaseOnAuthState(window.firebaseAuth, async user => {
+    if (user) {
+      state.authUid = user.uid;
+      const profile = await loadUserProfile(user.uid);
+      if (profile) {
+        state.me = { ...profile, uid: user.uid };
+        if (profile.lat && profile.lng) {
+          // Has location, go straight to users
+          setPresence(state.me);
+          listenNearby();
+          showScreen('users');
+        } else {
+          // New user, needs location
+          showScreen('mapsetup');
+          initMap();
+        }
+      } else {
+        // Profile missing somehow
+        showScreen('mapsetup');
+        initMap();
+      }
+    } else {
+      showScreen('auth');
+      showAuthTab('login');
+    }
+  });
+}
+</script>
+</body>
+</html>
