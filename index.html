@@ -9,8 +9,8 @@
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
-import { getDatabase, ref, set, onValue, push, child, onChildAdded, onDisconnect, serverTimestamp, update, get } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+import { getDatabase, ref, set, onValue, push, child, onChildAdded, onDisconnect, serverTimestamp, update, get, remove, increment, query, limitToLast, runTransaction, onChildRemoved } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile, reauthenticateWithCredential, EmailAuthProvider, deleteUser } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyB_1D5besvJG-0rX-RrcZZMpee38qSEvLs",
@@ -44,6 +44,15 @@ window.firebaseSignIn = signInWithEmailAndPassword;
 window.firebaseOnAuthState = onAuthStateChanged;
 window.firebaseSignOut = signOut;
 window.firebaseUpdateProfile = updateProfile;
+window.firebaseRemove = remove;
+window.firebaseIncrement = increment;
+window.firebaseQuery = query;
+window.firebaseLimitToLast = limitToLast;
+window.firebaseTransaction = runTransaction;
+window.firebaseOnChildRemoved = onChildRemoved;
+window.firebaseReauth = reauthenticateWithCredential;
+window.firebaseEmailCred = EmailAuthProvider;
+window.firebaseDeleteUser = deleteUser;
 
 window.addEventListener('DOMContentLoaded', initApp);
 </script>
@@ -51,7 +60,7 @@ window.addEventListener('DOMContentLoaded', initApp);
 *, *::before, *::after { box-sizing: border-box; }
 html, body { margin:0; padding:0; height:100%; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #f3f4f6; }
 #app { max-width:480px; margin:0 auto; height:100%; display:flex; flex-direction:column; position:relative; background:#ffffff; }
-.header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background: linear-gradient(90deg, #f59e0b, #d97706); color:#fff; font-weight:700; font-size:18px; position:sticky; top:0; z-index:50; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
+.header { display:flex; align-items:center; justify-space-between; padding:12px 16px; background: linear-gradient(90deg, #f59e0b, #d97706); color:#fff; font-weight:700; font-size:18px; position:sticky; top:0; z-index:50; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
 .header button { background:rgba(255,255,255,0.2); border:none; color:#fff; padding:6px 12px; border-radius:6px; font-weight:600; font-size:13px; cursor:pointer; backdrop-filter: blur(4px); }
 .header button:hover { background:rgba(255,255,255,0.35); }
 .header .logout-btn { background:rgba(255,255,255,0.25); font-size:12px; padding:5px 10px; }
@@ -99,6 +108,25 @@ input:focus, select:focus { outline:none; border-color:#f59e0b; }
 .map-hint { font-size:12px; color:#6b7280; margin-bottom:12px; text-align:center; }
 .gps-btn { width:100%; padding:10px; background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; margin-bottom:12px; }
 .loc-info { background:#f3f4f6; padding:10px 14px; border-radius:8px; font-size:13px; color:#374151; margin-bottom:12px; word-break:break-all; }
+.navbar{display:flex;background:#fff;border-bottom:1px solid #e5e7eb;overflow-x:auto;}
+.navbar button{flex:1;padding:10px 4px;border:none;background:none;font-weight:700;font-size:13px;color:#6b7280;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;}
+.navbar button.active{color:#d97706;border-bottom-color:#f59e0b}
+.badge{background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px}
+.notif{position:fixed;top:12px;left:50%;transform:translate(-50%,-160%);width:min(440px,92%);background:#111827;color:#fff;padding:12px 16px;border-radius:12px;z-index:200;cursor:pointer;transition:transform .3s;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+.notif.show{transform:translate(-50%,0)}
+.notif b{display:block;font-size:13px}.notif span{font-size:13px;opacity:.85}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:300;padding:20px}
+.modal.open{display:flex}
+.modal-card{background:#fff;border-radius:16px;padding:20px;width:100%;max-width:340px;text-align:center}
+.modal-card .row{display:flex;gap:10px}
+.icon-btn,.chat-input-wrap .icon-btn{background:#f3f4f6;color:#111827;padding:8px 10px;border:none;border-radius:10px;font-size:16px;cursor:pointer}
+.chat-input-wrap .icon-btn.rec{background:#ef4444;color:#fff}
+.tray{display:none;flex-wrap:wrap;gap:6px;max-height:170px;overflow-y:auto;padding:8px;border-top:1px solid #e5e7eb}
+.tray.open{display:flex}
+.tray img{cursor:pointer;height:64px;border-radius:8px}
+.mini{border:none;border-radius:6px;padding:6px 10px;font-weight:700;font-size:12px;color:#fff;cursor:pointer;margin-left:4px}
+.mini.ok{background:#059669}.mini.no{background:#ef4444}
+.danger-btn{width:100%;padding:12px;border:none;border-radius:10px;background:#ef4444;color:#fff;font-weight:700;cursor:pointer;margin-top:10px}
 </style>
 </head>
 <body>
@@ -109,6 +137,14 @@ input:focus, select:focus { outline:none; border-color:#f59e0b; }
       <button id="spotlightBtn">Spotlight Pass (₹19)</button>
       <button class="logout-btn" id="logoutBtn" style="display:none;">Logout</button>
     </div>
+  </div>
+
+  <div class="navbar" id="navbar" style="display:none;">
+    <button data-go="mapsetup">Location</button>
+    <button data-go="users" class="active">People</button>
+    <button data-go="chats">Chats <span class="badge" id="unreadBadge" style="display:none;">0</span></button>
+    <button data-go="settings">Settings</button>
+    <button data-go="admin" id="navAdmin" style="display:none;">Admin</button>
   </div>
 
   <!-- Screen 0: Auth (Login / Signup) -->
@@ -146,6 +182,10 @@ input:focus, select:focus { outline:none; border-color:#f59e0b; }
       <div class="form-group">
         <label for="suDisplayName">Display Name</label>
         <input id="suDisplayName" type="text" placeholder="e.g., ChennaiVibe" maxlength="20" />
+      </div>
+      <div class="form-group">
+        <label for="suBio">Bio (optional)</label>
+        <input id="suBio" type="text" placeholder="A line about you" maxlength="140" />
       </div>
       <div class="form-group">
         <label for="suNeighborhood">Neighborhood</label>
@@ -222,6 +262,25 @@ input:focus, select:focus { outline:none; border-color:#f59e0b; }
     <div id="users-list"></div>
   </div>
 
+  <!-- Gate: pending / rejected -->
+  <div class="screen" id="screen-gate" style="align-items:center;justify-content:center;text-align:center;">
+    <div style="font-size:48px;" id="gateIcon">&#9203;</div>
+    <h2 id="gateTitle" style="color:#111827;"></h2>
+    <p id="gateMsg" style="color:#6b7280;font-size:14px;"></p>
+    <button class="btn-secondary" id="gateLogout" style="max-width:240px;">Logout</button>
+  </div>
+  <!-- Recent chats -->
+  <div class="screen" id="screen-chats"><h3 style="margin:0 0 12px;color:#111827;">Recent Chats</h3><div id="chats-list"></div></div>
+  <!-- Settings -->
+  <div class="screen" id="screen-settings">
+    <h3 style="margin:0 0 12px;color:#111827;">Settings</h3>
+    <div class="loc-info" id="setInfo"></div>
+    <button class="btn-secondary" id="btnNotif">Enable browser notifications</button>
+    <button class="danger-btn" id="btnDeleteAcct">Delete Account</button>
+  </div>
+  <!-- Admin -->
+  <div class="screen" id="screen-admin"><h3 style="margin:0 0 12px;color:#111827;">Pending Approvals</h3><div id="admin-list"></div></div>
+
   <!-- Screen 3: Chat -->
   <div class="screen" id="screen-chat">
     <div class="chat-header" id="chatHeader"></div>
@@ -232,12 +291,21 @@ input:focus, select:focus { outline:none; border-color:#f59e0b; }
     </div>
     <div id="revealBanner"></div>
     <div class="chat-area" id="chatArea"></div>
+    <div class="tray" id="gifTray"><input id="gifQ" type="text" placeholder="Search GIFs and press Enter" /><div id="gifGrid" style="display:flex;flex-wrap:wrap;gap:6px;width:100%;"></div></div>
+    <div class="tray" id="stickerTray"></div>
     <div class="chat-input-wrap">
       <input id="msgInput" type="text" placeholder="Type a message..." />
+      <button class="icon-btn" id="btnMic" title="Voice note">&#127908;</button>
+      <button class="icon-btn" id="btnGif" title="GIF">GIF</button>
+      <button class="icon-btn" id="btnSticker" title="Stickers">&#128522;</button>
       <button id="btnSend">Send</button>
     </div>
   </div>
 </div>
+<div class="notif" id="notif"></div>
+<div class="modal" id="modal"><div class="modal-card" id="modalBody"></div></div>
+<div class="modal" id="callModal"><div class="modal-card" id="callBody"></div></div>
+<audio id="remoteAudio" autoplay></audio>
 <div class="toast" id="toast"></div>
 
 <script>
@@ -265,19 +333,28 @@ const state = {
   revealRequests: new Set(JSON.parse(localStorage.getItem('namma_reveals')||'[]')),
   presenceRef: null,
   authUid: null,
+  offs: [], chats: {}, cleared: {}, isAdmin: false, entered: false, statusOff: null,
 };
 
 /* === SCREEN NAVIGATION === */
 function showScreen(name) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   $(`screen-${name}`).classList.add('active');
-  const onAuth = name !== 'auth';
-  $('backBtn').style.display = (onAuth && name !== 'users') ? 'inline-block' : 'none';
-  $('logoutBtn').style.display = onAuth ? 'inline-block' : 'none';
+  if (name !== 'chat') state.activeChatUid = null;
+  
+  $('navbar').style.display = ['mapsetup','users','chats','settings','admin'].includes(name) ? 'flex' : 'none';
+  document.querySelectorAll('#navbar button').forEach(b => b.classList.toggle('active', b.dataset.go === name));
+  $('backBtn').style.display = (name === 'mapsetup' || name === 'chat') ? 'inline-block' : 'none';
+  $('logoutBtn').style.display = name !== 'auth' ? 'inline-block' : 'none';
+  
+  if (name === 'mapsetup') {
+    initMap();
+    setTimeout(() => { if (state.map) state.map.invalidateSize(); }, 200);
+  }
 }
 $('backBtn').onclick = () => {
   if ($('screen-chat').classList.contains('active')) showScreen('users');
-  else if ($('screen-mapsetup').classList.contains('active')) { /* stay or go to users if has loc */ }
+  else if ($('screen-mapsetup').classList.contains('active')) { showScreen('users'); }
   else showScreen('users');
 };
 
@@ -313,6 +390,18 @@ function updateMapCircle(lat, lng, radiusKm) {
 /* === GEOLOCATION === */
 function getLocation() {
   return new Promise((res, rej) => {
+    // Hardcoded fallback for Nungambakkam, Chennai during local testing
+    const isLocalhost = Boolean(
+      window.location.hostname === 'localhost' ||
+      window.location.hostname === '[::1]' ||
+      window.location.hostname.match(/^127(?:\.(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)){3}$/)
+    );
+
+    if (isLocalhost) {
+      console.warn('[LOCAL TEST] Bypassing GPS. Using Nungambakkam location.');
+      return res({ lat: 13.0626, lng: 80.2425 });
+    }
+
     if (!navigator.geolocation) return rej('Geolocation not supported.');
     navigator.geolocation.getCurrentPosition(
       pos => res({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
@@ -329,7 +418,7 @@ function chatKey(a, b) { return a < b ? `chats/${a}_${b}` : `chats/${b}_${a}`; }
 
 function setPresence(user) {
   const pRef = window.firebaseRef(window.firebaseDB, presenceKey(user.uid));
-  window.firebaseSet(pRef, { name: user.name, area: user.area, lat: user.lat, lng: user.lng, radius: user.radius, spotlight: user.spotlight||false, online: true, ts: Date.now() });
+  window.firebaseSet(pRef, { name: user.name, area: user.area, lat: user.lat, lng: user.lng, radius: user.radius, spotlight: user.spotlight||false, bio: user.bio||'', online: true, ts: Date.now() });
   const disc = window.firebaseOnDisconnect(pRef);
   disc.update({ online: false, ts: Date.now() });
   state.presenceRef = pRef;
@@ -337,7 +426,7 @@ function setPresence(user) {
 
 function saveUserProfile(user) {
   const uRef = window.firebaseRef(window.firebaseDB, userProfileKey(user.uid));
-  window.firebaseSet(uRef, { name: user.name, area: user.area, radius: user.radius, spotlight: user.spotlight||false, lat: user.lat, lng: user.lng, email: user.email, ts: Date.now() });
+  window.firebaseUpdate(uRef, { name: user.name, area: user.area, radius: user.radius, spotlight: user.spotlight||false, lat: user.lat, lng: user.lng, email: user.email, ts: Date.now() });
 }
 
 function loadUserProfile(uid) {
@@ -346,7 +435,7 @@ function loadUserProfile(uid) {
 
 function listenNearby() {
   const presRef = window.firebaseRef(window.firebaseDB, 'presence');
-  window.firebaseOnValue(presRef, snap => {
+  state.offs.push(window.firebaseOnValue(presRef, snap => {
     const all = snap.val() || {};
     const arr = [];
     Object.entries(all).forEach(([uid, data]) => {
@@ -359,13 +448,13 @@ function listenNearby() {
     arr.sort((a,b) => a.distanceKm - b.distanceKm);
     state.users = arr;
     renderUsers();
-  });
+  }));
 }
 
 function renderUsers() {
   const box = $('users-list');
   if (!state.users.length) {
-    box.innerHTML = `<div class="empty-state">No one nearby right now.<br><span style="font-size:13px;">Try increasing your radius.</span></div>`; return;
+    box.innerHTML = `<div class="empty-state">No one nearby right now.<br><span style="font-size:13px;">Try increasing your radius in Location.</span></div>`; return;
   }
   box.innerHTML = state.users.map(u => {
     const spotlight = u.spotlight ? ' <span style="color:#f59e0b;">★</span>' : '';
@@ -389,22 +478,42 @@ let revealListenerOff = null;
 
 function openChat(uid) {
   state.activeChatUid = uid;
-  const them = state.users.find(u => u.uid === uid) || { name: 'User' };
-  $('chatHeader').innerHTML = `<div class="avatar">${them.name ? them.name[0].toUpperCase() : '?'}</div><div><div style="font-weight:700;">${them.name}</div><div style="font-size:12px;color:#6b7280;">${them.online ? 'Online' : 'Offline'}</div></div>`;
-  $('chatArea').innerHTML = '';
-  $('revealBanner').innerHTML = '';
+  renderChatHeader(uid);
+  $('chatArea').innerHTML = '';$('revealBanner').innerHTML = '';
   showScreen('chat');
   $('msgInput').focus();
+  markRead(uid);
 
   if (chatListenerOff) { chatListenerOff(); chatListenerOff = null; }
   if (revealListenerOff) { revealListenerOff(); revealListenerOff = null; }
 
   const chatPath = chatKey(state.me.uid, uid);
   const messagesRef = window.firebaseRef(window.firebaseDB, chatPath + '/messages');
-  chatListenerOff = window.firebaseOnChildAdded(messagesRef, snap => {
-    const m = snap.val();
-    if (!m) return;
-    appendMessage(m);
+
+  // 1. Fetch all existing historical messages first
+  window.firebaseGet(messagesRef).then(snap => {
+    const data = snap.val() || {};
+    const clearedTime = state.cleared[uid] || 0;
+    
+    // Sort history chronologically
+    const history = Object.entries(data).map(([k, v]) => v && { ...v, _k: k })
+      .filter(m => m && m.ts > clearedTime)
+      .sort((a, b) => a.ts - b.ts);
+
+    // Render all existing messages
+    history.forEach(m => appendMessage(m));
+
+    // Track the latest message timestamp loaded
+    const lastTs = history.length ? history[history.length - 1].ts : clearedTime;
+    
+    // 2. Listen only for NEW incoming messages arriving after lastTs
+    chatListenerOff = window.firebaseOnChildAdded(messagesRef, snap => {
+      const m = snap.val();
+      if (!m || m.ts <= lastTs) return;
+      appendMessage({ ...m, _k: snap.key });
+    });
+  }).catch(err => {
+    console.error("Error loading chat history:", err);
   });
 
   const rid = [state.me.uid, uid].sort().join('_');
@@ -428,18 +537,16 @@ function appendMessage(m) {
   const div = document.createElement('div');
   div.className = 'message ' + (m.from === state.me.uid ? 'me' : 'them');
   const time = new Date(m.ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
-  div.innerHTML = `<div>${escapeHtml(m.text)}</div><span class="ts">${time}</span>`;
+  div.innerHTML = renderBody(m) + `<span class="ts">${time}</span>`;
   $('chatArea').appendChild(div);
-  $('chatArea').scrollTop = $('chatArea').scrollHeight;
+  $('chatArea').scrollTop =$('chatArea').scrollHeight;
 }
 function escapeHtml(t) { return t.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function sendMessage() {
   const text = $('msgInput').value.trim();
   if (!text || !state.activeChatUid) return;
-  const chatPath = chatKey(state.me.uid, state.activeChatUid);
-  const msgRef = window.firebaseRef(window.firebaseDB, chatPath + '/messages');
-  window.firebasePush(msgRef, { from: state.me.uid, text, ts: Date.now() });
+  sendMsg({ type: 'text', text: text.slice(0, 1000) });
   $('msgInput').value = '';
 }
 $('btnSend').onclick = sendMessage;
@@ -475,24 +582,6 @@ function acceptReveal(fromUid) {
 }
 $('btnReveal').onclick = requestReveal;
 
-/* === SAFETY === */
-$('btnBlock').onclick = () => {
-  if (!state.activeChatUid) return;
-  if (!confirm('Block this user? You won\'t see them again.')) return;
-  state.blocked.add(state.activeChatUid);
-  localStorage.setItem('namma_blocked', JSON.stringify([...state.blocked]));
-  showToast('User blocked');
-  showScreen('users');
-};
-$('btnReport').onclick = () => {
-  if (!state.activeChatUid) return;
-  const reason = prompt('Report reason (spam / abuse / other):');
-  if (!reason) return;
-  const reportRef = window.firebaseRef(window.firebaseDB, 'reports/' + Date.now());
-  window.firebaseSet(reportRef, { reporter: state.me.uid, reported: state.activeChatUid, reason, ts: Date.now() });
-  showToast('Report submitted. Thank you.');
-};
-
 /* === SPOTLIGHT / RAZORPAY === */
 $('spotlightBtn').onclick = () => {
   if (!state.me) { showToast('Complete setup first'); return; }
@@ -524,22 +613,16 @@ $('spotlightBtn').onclick = () => {
 /* === AUTH HANDLERS === */
 function showAuthTab(tab) {
   if (tab === 'login') {
-    $('loginForm').style.display = 'block';
-    $('signupForm').style.display = 'none';
-    $('tabLogin').classList.add('active');
-    $('tabSignup').classList.remove('active');
+    $('loginForm').style.display = 'block';$('signupForm').style.display = 'none';
+    $('tabLogin').classList.add('active');$('tabSignup').classList.remove('active');
   } else {
-    $('loginForm').style.display = 'none';
-    $('signupForm').style.display = 'block';
-    $('tabLogin').classList.remove('active');
-    $('tabSignup').classList.add('active');
+    $('loginForm').style.display = 'none';$('signupForm').style.display = 'block';
+    $('tabLogin').classList.remove('active');$('tabSignup').classList.add('active');
   }
   $('auth-status').textContent = '';
 }
-$('tabLogin').onclick = () => showAuthTab('login');
-$('tabSignup').onclick = () => showAuthTab('signup');
-$('goSignup').onclick = () => showAuthTab('signup');
-$('goLogin').onclick = () => showAuthTab('login');
+$('tabLogin').onclick = () => showAuthTab('login');$('tabSignup').onclick = () => showAuthTab('signup');
+$('goSignup').onclick = () => showAuthTab('signup');$('goLogin').onclick = () => showAuthTab('login');
 
 $('btnLogin').onclick = async () => {
   const email = $('loginEmail').value.trim();
@@ -562,6 +645,7 @@ $('btnSignup').onclick = async () => {
   const password = $('suPassword').value;
   const name = $('suDisplayName').value.trim();
   const area = $('suNeighborhood').value;
+  const bio = $('suBio').value.trim().slice(0, 140);
   const radius = parseFloat($('suRadius').value);
   const status = $('auth-status');
 
@@ -571,15 +655,18 @@ $('btnSignup').onclick = async () => {
   status.style.color = '#059669';
   status.textContent = 'Creating account...';
   try {
+    window.__signingUp = true;
     const cred = await window.firebaseCreateUser(window.firebaseAuth, email, password);
     const uid = cred.user.uid;
     await window.firebaseUpdateProfile(cred.user, { displayName: name });
     // Save profile to DB (location will be set next screen)
-    const profile = { uid, email, name, area, radius, spotlight: false, lat: null, lng: null };
+    const profile = { uid, email, name, area, radius, bio, status: 'pending', spotlight: false, lat: null, lng: null };
     await window.firebaseSet(window.firebaseRef(window.firebaseDB, userProfileKey(uid)), profile);
     status.textContent = '';
-    // Handled by onAuthStateChanged
+    window.__signingUp = false;
+    routeUser(cred.user);
   } catch (err) {
+    window.__signingUp = false;
     status.style.color = '#ef4444';
     status.textContent = err.message;
   }
@@ -589,6 +676,7 @@ $('logoutBtn').onclick = async () => {
   if (state.presenceRef) {
     await window.firebaseUpdate(state.presenceRef, { online: false, ts: Date.now() });
   }
+  teardown();
   await window.firebaseSignOut(window.firebaseAuth);
   state.me = null;
   state.authUid = null;
@@ -657,31 +745,341 @@ function initApp() {
 
   window.firebaseOnAuthState(window.firebaseAuth, async user => {
     if (user) {
-      state.authUid = user.uid;
-      const profile = await loadUserProfile(user.uid);
-      if (profile) {
-        state.me = { ...profile, uid: user.uid };
-        if (profile.lat && profile.lng) {
-          // Has location, go straight to users
-          setPresence(state.me);
-          listenNearby();
-          showScreen('users');
-        } else {
-          // New user, needs location
-          showScreen('mapsetup');
-          initMap();
-        }
-      } else {
-        // Profile missing somehow
-        showScreen('mapsetup');
-        initMap();
-      }
+      if (window.__signingUp) return;
+      routeUser(user);
     } else {
       showScreen('auth');
       showAuthTab('login');
     }
   });
 }
+
+/* ================= V2 FEATURES ================= */
+const R = p => window.firebaseRef(window.firebaseDB, p);
+const ROOT = () => window.firebaseRef(window.firebaseDB);
+const esc = escapeHtml;
+const GIPHY_KEY = 'YOUR_GIPHY_API_KEY';   // <-- get a free key at developers.giphy.com
+const STICKERS = ['🙏','☕','🌴','🛺','🏏','🥥','😂','❤️','👍','🎉','😎','🍛'];
+const stickerSrc = e => 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text x="50" y="76" font-size="80" text-anchor="middle">' + e + '</text></svg>');
+
+/* --- 1. Admin approval gate --- */
+async function routeUser(user) {
+  teardown();
+  state.authUid = user.uid;
+  const [p, a] = await Promise.all([loadUserProfile(user.uid), window.firebaseGet(R('admins/' + user.uid)).catch(() => null)]);
+  state.isAdmin = !!(a && a.val() === true);
+  const prof = p || {};
+  state.me = { ...prof, uid: user.uid, name: prof.name || user.displayName || 'User', email: prof.email || user.email };
+  state.blocked = new Set([...state.blocked, ...Object.keys(prof.blocked || {})]);
+  state.cleared = prof.cleared || {};
+  state.statusOff = window.firebaseOnValue(R(`users/${user.uid}/status`), s => applyStatus(s.val()));
+}
+function applyStatus(st) {
+  st = state.isAdmin ? 'approved' : (st || 'pending');
+  if (st === 'approved') return enterApp();
+  stopApp();
+  const rejected = st === 'rejected';
+  $('gateIcon').textContent = rejected ? '🚫' : '⏳';
+  $('gateTitle').textContent = rejected ? 'Access Denied' : 'Account Pending Admin Approval';
+  $('gateMsg').textContent = rejected ? 'Your account was not approved by the admin.' : "An admin needs to approve your account before you can chat. You'll be let in automatically once approved.";
+  showScreen('gate');
+}
+function enterApp() {
+  if (state.entered) return;
+  state.entered = true;
+  const p = state.me;
+  if (p.lat && p.lng) { setPresence(p); listenNearby(); showScreen('users'); }
+  else { showScreen('mapsetup'); initMap(); }
+  listenChats(); listenIncomingCalls();
+  $('navAdmin').style.display = state.isAdmin ? '' : 'none';
+  if (state.isAdmin) listenAdmin();
+  document.addEventListener('click', askNotif, { once: true });
+}
+function stopApp() {
+  state.offs.forEach(f => { try { f(); } catch (e) {} });
+  state.offs = []; state.entered = false; state.chats = {};
+  if (chatListenerOff) { chatListenerOff(); chatListenerOff = null; }
+  if (revealListenerOff) { revealListenerOff(); revealListenerOff = null; }
+  endCall(true); updateBadge();
+}
+function teardown() {
+  stopApp();
+  if (state.statusOff) { state.statusOff(); state.statusOff = null; }
+  state.isAdmin = false;
+}
+$('gateLogout').onclick = () =>$('logoutBtn').click();
+document.querySelectorAll('#navbar button').forEach(b => b.onclick = () => {
+  showScreen(b.dataset.go);
+  if (b.dataset.go === 'settings' && state.me) $('setInfo').textContent = `${state.me.name} · ${state.me.email || ''}`;
+});
+
+function listenAdmin() {
+  state.offs.push(window.firebaseOnValue(R('users'), snap => {
+    const pending = Object.entries(snap.val() || {}).filter(([, u]) => (u.status || 'pending') === 'pending');
+    const box = $('admin-list');
+    box.innerHTML = pending.length ? pending.map(([uid, u]) => `<div class="user-card" style="cursor:default;"><div class="avatar">${esc((u.name || '?')[0].toUpperCase())}</div><div class="user-info"><div class="user-name">${esc(u.name || '')}</div><div class="user-meta">${esc(u.email || '')} · ${esc(u.area || '')}</div></div><button class="mini ok" data-uid="${uid}" data-s="approved">Approve</button><button class="mini no" data-uid="${uid}" data-s="rejected">Reject</button></div>`).join('') : '<div class="empty-state">No pending users 🎉</div>';
+    box.querySelectorAll('button').forEach(b => b.onclick = () =>
+      window.firebaseUpdate(R('users/' + b.dataset.uid), { status: b.dataset.s }).then(() => showToast('Marked ' + b.dataset.s)).catch(e => showToast(e.message)));
+  }));
+}
+
+/* --- 2. Recent chats + unread counts --- */
+function peerName(uid) { return (state.users.find(u => u.uid === uid) || state.chats[uid] || {}).name || 'User'; }
+function listenChats() {
+  let first = true;
+  state.offs.push(window.firebaseOnValue(R(`user-chats/${state.me.uid}`), snap => {
+    const now = snap.val() || {}, prev = state.chats;
+    state.chats = now;
+    Object.entries(now).forEach(([peer, c]) => {
+      if (!first && !state.blocked.has(peer) && (c.unreadCount || 0) > ((prev[peer] || {}).unreadCount || 0)) onIncoming(peer, c);
+    });
+    first = false; updateBadge(); renderChats();
+  }));
+}
+function updateBadge() {
+  const total = Object.entries(state.chats).reduce((n, [p, c]) => n + (state.blocked.has(p) ? 0 : (c.unreadCount || 0)), 0);
+  const b = $('unreadBadge'); b.textContent = total; b.style.display = total ? '' : 'none';
+  document.title = (total ? `(${total}) ` : '') + 'NammaChat - Chennai Local Meetups';
+}
+function renderChats() {
+  const list = Object.entries(state.chats).filter(([p, c]) => !state.blocked.has(p) && c.lastMessage).sort((a, b) => (b[1].timestamp || 0) - (a[1].timestamp || 0));
+  const fmt = t => { const d = new Date(t); return d.toDateString() === new Date().toDateString() ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : d.toLocaleDateString([], { day: 'numeric', month: 'short' }); };
+  $('chats-list').innerHTML = list.length ? list.map(([p, c]) => `<div class="user-card" data-peer="${p}"><div class="avatar">${esc((c.name || '?')[0].toUpperCase())}</div><div class="user-info"><div class="user-name">${esc(c.name || 'User')}</div><div class="user-meta">${esc(c.lastMessage)}</div></div><div style="text-align:right;"><div class="user-meta">${fmt(c.timestamp || 0)}</div>${c.unreadCount ? `<span class="badge">${c.unreadCount}</span>` : ''}</div></div>`).join('') : '<div class="empty-state">No conversations yet.<br><span style="font-size:13px;">Tap someone in People to start.</span></div>';
+  $('chats-list').querySelectorAll('.user-card').forEach(c => c.onclick = () => openChat(c.dataset.peer));
+}
+function markRead(peer) {
+  if ((state.chats[peer] || {}).unreadCount) window.firebaseUpdate(R(`user-chats/${state.me.uid}/${peer}`), { unreadCount: 0 });
+}
+
+/* --- 3. Toast banner, chime, native notifications --- */
+let actx;
+function chime() {
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
+    o.type = 'sine'; o.frequency.setValueAtTime(880, t); o.frequency.exponentialRampToValueAtTime(1320, t + 0.12);
+    g.gain.setValueAtTime(0.08, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+    o.connect(g).connect(actx.destination); o.start(t); o.stop(t + 0.36);
+  } catch (e) {}
+}
+function askNotif() { if (window.Notification && Notification.permission === 'default') Notification.requestPermission(); }
+$('btnNotif').onclick = () => { askNotif(); showToast(window.Notification ? 'Notifications: ' + Notification.permission : 'Not supported'); };
+function onIncoming(peer, c) {
+  chime();
+  if (state.activeChatUid === peer && !document.hidden) return markRead(peer);
+  const n = $('notif');
+  n.innerHTML = `<b>${esc(c.name || 'New message')}</b><span>${esc(c.lastMessage || '')}</span>`;
+  n.onclick = () => { n.classList.remove('show'); openChat(peer); };
+  n.classList.add('show'); clearTimeout(n._t); n._t = setTimeout(() => n.classList.remove('show'), 4500);
+  if (document.hidden && window.Notification && Notification.permission === 'granted') {
+    const nt = new Notification(c.name || 'NammaChat', { body: c.lastMessage || '', tag: peer });
+    nt.onclick = () => { window.focus(); openChat(peer); nt.close(); };
+  }
+}
+
+/* --- Sending (all types) + rendering --- */
+function sendMsg(m) {
+  const peer = state.activeChatUid, me = state.me;
+  if (!peer) return;
+  const path = chatKey(me.uid, peer), ts = Date.now();
+  const key = window.firebasePush(R(path + '/messages')).key;
+  const pv = { text: (m.text || '').slice(0, 80), audio: '🎤 Voice message', gif: 'GIF', sticker: (m.sticker || '') + ' Sticker' }[m.type];
+  const mine = `user-chats/${me.uid}/${peer}/`, theirs = `user-chats/${peer}/${me.uid}/`;
+  window.firebaseUpdate(ROOT(), {
+    [`${path}/messages/${key}`]: { from: me.uid, ts, ...m },
+    [mine + 'lastMessage']: pv, [mine + 'timestamp']: ts, [mine + 'name']: peerName(peer), [mine + 'unreadCount']: 0,
+    [theirs + 'lastMessage']: pv, [theirs + 'timestamp']: ts, [theirs + 'name']: me.name, [theirs + 'unreadCount']: window.firebaseIncrement(1)
+  }).catch(e => showToast('Send failed: ' + e.message));
+}
+function renderBody(m) {
+  const t = m.type || 'text';
+  if (t === 'audio' && /^data:audio\//.test(m.audio || '')) return `<audio controls preload="none" src="${m.audio}" style="max-width:220px;"></audio>`;
+  if (t === 'gif' && /^https:\/\/([\w-]+\.)*(giphy|tenor)\.com\//.test(m.gif || '')) return `<img src="${esc(m.gif)}" style="max-width:100%;border-radius:10px;" alt="GIF">`;
+  if (t === 'sticker' && STICKERS.includes(m.sticker)) return `<img src="${stickerSrc(m.sticker)}" width="96" height="96" alt="sticker">`;
+  return `<div>${esc(m.text || '')}</div>`;
+}
+
+/* --- 6. Voice notes, GIFs, stickers --- */
+let rec = null;
+$('btnMic').onclick = async () => {
+  if (rec) { rec.stop(); return; }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const chunks = []; rec = new MediaRecorder(stream);
+    const tm = setTimeout(() => rec && rec.stop(), 30000);   // 30s cap keeps base64 small
+    rec.ondataavailable = e => chunks.push(e.data);
+    rec.onstop = () => {
+      clearTimeout(tm); stream.getTracks().forEach(t => t.stop());
+      const mime = rec.mimeType || 'audio/webm'; rec = null; $('btnMic').classList.remove('rec');
+      const fr = new FileReader();
+      fr.onload = () => fr.result.length > 900000 ? showToast('Voice note too long') : sendMsg({ type: 'audio', audio: fr.result });
+      fr.readAsDataURL(new Blob(chunks, { type: mime }));
+    };
+    rec.start(); $('btnMic').classList.add('rec'); showToast('Recording… tap 🎤 again to send');
+  } catch (e) { rec = null; showToast('Microphone unavailable'); }
+};
+function toggleTray(id) {
+  ['gifTray', 'stickerTray'].forEach(t => $(t).classList.toggle('open', t === id && !$(t).classList.contains('open')));
+}
+$('btnGif').onclick = () => { toggleTray('gifTray'); if (!$('gifGrid').innerHTML) searchGifs(''); };
+$('gifQ').addEventListener('keydown', e => { if (e.key === 'Enter') searchGifs($('gifQ').value.trim()); });
+async function searchGifs(q) {
+  if (GIPHY_KEY.startsWith('YOUR_')) { $('gifGrid').innerHTML = '<div class="empty-state">Set GIPHY_KEY in the script.</div>'; return; }
+  const u = `https://api.giphy.com/v1/gifs/${q ? 'search' : 'trending'}?api_key=${GIPHY_KEY}&limit=18&rating=g` + (q ? '&q=' + encodeURIComponent(q) : '');
+  try {
+    const j = await (await fetch(u)).json();
+    $('gifGrid').innerHTML = j.data.map(g => `<img src="${g.images.fixed_height_small.url}" data-u="${g.images.fixed_height.url}">`).join('');
+  } catch (e) { $('gifGrid').innerHTML = '<div class="empty-state">GIF search failed.</div>'; }
+}
+$('gifGrid').onclick = e => { if (e.target.dataset.u) { sendMsg({ type: 'gif', gif: e.target.dataset.u }); toggleTray(null); } };$('stickerTray').innerHTML = STICKERS.map(s => `<img data-s="${s}" src="${stickerSrc(s)}">`).join('');
+$('stickerTray').onclick = e => { if (e.target.dataset.s) { sendMsg({ type: 'sticker', sticker: e.target.dataset.s }); toggleTray(null); } };$('btnSticker').onclick = () => toggleTray('stickerTray');
+
+/* --- 4. Chat header: profile, delete, block, report --- */
+async function peerInfo(uid) {
+  let u = state.users.find(x => x.uid === uid);
+  if (!u) {
+    const v = await window.firebaseGet(R('presence/' + uid)).then(s => s.val()).catch(() => null);
+    if (v) u = { uid, ...v, distanceKm: (state.me.lat && v.lat) ? haversine(state.me.lat, state.me.lng, v.lat, v.lng) : null };
+  }
+  return u || { uid, name: peerName(uid) };
+}
+function renderChatHeader(uid) {
+  const draw = t => {
+    if (state.activeChatUid !== uid) return;
+    $('chatHeader').innerHTML = `<div class="avatar">${esc((t.name || '?')[0].toUpperCase())}</div><div style="flex:1;"><div style="font-weight:700;">${esc(t.name || 'User')}${t.spotlight ? ' <span style="color:#f59e0b;">★</span>' : ''}</div><div style="font-size:12px;color:#6b7280;">${t.online ? 'Online' : 'Offline'}</div></div><button class="icon-btn" id="hCall" title="Voice call">📞</button><button class="icon-btn" id="hProfile" title="View profile">👤</button><button class="icon-btn" id="hDelete" title="Delete chat">🗑️</button>`;
+    $('hCall').onclick = () => startCall(uid, t.name || 'User');
+    $('hProfile').onclick = () => {$('modalBody').innerHTML = `<div class="avatar" style="margin:0 auto 8px;">${esc((t.name || '?')[0].toUpperCase())}</div><h3 style="margin:0;">${esc(t.name || 'User')}${t.spotlight ? ' <span style="color:#f59e0b;">★</span>' : ''}</h3><p class="user-meta">${esc(t.area || 'Unknown area')} · ${t.distanceKm != null ? t.distanceKm.toFixed(1) + ' km away' : 'distance unknown'}</p><p style="font-size:14px;color:#374151;">${esc(t.bio || 'No bio yet.')}</p><p class="user-meta">Spotlight: ${t.spotlight ? 'Active ★' : 'No'}</p><button class="btn-secondary" id="modalClose">Close</button>`;
+      $('modal').classList.add('open'); $('modalClose').onclick = () =>$('modal').classList.remove('open');
+    };
+    $('hDelete').onclick = deleteChat;
+  };
+  draw({ name: peerName(uid) }); peerInfo(uid).then(draw);
+}
+async function deleteChat() {
+  const peer = state.activeChatUid;
+  if (!peer || !confirm('Delete this chat for you? The other person keeps their copy.')) return;
+  const ts = Date.now(); state.cleared[peer] = ts;
+  await window.firebaseUpdate(ROOT(), { [`users/${state.me.uid}/cleared/${peer}`]: ts, [`user-chats/${state.me.uid}/${peer}`]: null });
+  $('chatArea').innerHTML = ''; showScreen('chats'); showToast('Chat deleted');
+}
+$('btnBlock').onclick = async () => {
+  const peer = state.activeChatUid;
+  if (!peer || !confirm("Block this user? You won't see them again.")) return;
+  state.blocked.add(peer);
+  localStorage.setItem('namma_blocked', JSON.stringify([...state.blocked]));
+  await window.firebaseSet(R(`users/${state.me.uid}/blocked/${peer}`), true).catch(() => {});
+  state.users = state.users.filter(u => u.uid !== peer);
+  renderUsers(); renderChats(); updateBadge();
+  showToast('User blocked'); showScreen('users');
+};
+$('btnReport').onclick = () => {
+  const peer = state.activeChatUid; if (!peer) return;
+  const reason = prompt('Report reason (spam / abuse / other):'); if (!reason) return;
+  window.firebaseSet(window.firebasePush(R('reports')), { reporter: state.me.uid, target: peer, reason: reason.slice(0, 300), ts: Date.now() })
+    .then(() => showToast('Report submitted. Thank you.')).catch(e => showToast(e.message));
+};
+
+/* --- 5. WebRTC voice calling (signaling in RTDB /calls + /incoming-calls) --- */
+const call = { pc: null, id: null, stream: null, peer: null, role: null, off: [], q: [], timer: null };
+const ICE = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };   // add a TURN server for strict NATs
+const callUI = h => { $('callBody').innerHTML = h; $('callModal').classList.add('open'); };
+const hideCall = () => $('callModal').classList.remove('open');
+function addCand(c) { if (!c) return; if (call.pc && call.pc.remoteDescription) call.pc.addIceCandidate(c).catch(() => {}); else call.q.push(c); }
+function inCallUI(name) { callUI(`<h3>🔊 In call with ${esc(name)}</h3><button class="danger-btn" id="callEnd">End call</button>`); $('callEnd').onclick = () => endCall(true); }
+async function makePC(id, role, peer) {
+  Object.assign(call, { id, role, peer, q: [] });
+  call.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const pc = call.pc = new RTCPeerConnection(ICE);
+  call.stream.getTracks().forEach(t => pc.addTrack(t, call.stream));
+  pc.ontrack = e => { $('remoteAudio').srcObject = e.streams[0]; };
+  pc.onicecandidate = e => e.candidate && window.firebasePush(R(`calls/${id}/iceCandidates/${role}`), e.candidate.toJSON());
+  pc.onconnectionstatechange = () => { if (['failed', 'disconnected'].includes(pc.connectionState)) endCall(true); };
+  call.off.push(window.firebaseOnChildAdded(R(`calls/${id}/iceCandidates/${role === 'caller' ? 'callee' : 'caller'}`), s => addCand(s.val())));
+  call.off.push(window.firebaseOnValue(R(`calls/${id}/status`), s => { if (s.val() === 'ended') endCall(false); }));
+  return pc;
+}
+async function startCall(peer, name) {
+  if (call.pc) return showToast('Already in a call');
+  try {
+    const id = window.firebasePush(R('calls')).key;
+    const pc = await makePC(id, 'caller', peer);
+    const offer = await pc.createOffer();
+    // write the call node BEFORE setLocalDescription so ICE candidates have somewhere to go
+    await window.firebaseSet(R('calls/' + id), { from: state.me.uid, to: peer, fromName: state.me.name, status: 'ringing', offer: { type: offer.type, sdp: offer.sdp }, ts: Date.now() });
+    await pc.setLocalDescription(offer);
+    await window.firebaseSet(R('incoming-calls/' + peer), { callId: id, from: state.me.uid, fromName: state.me.name, ts: Date.now() });
+    callUI(`<h3>Calling ${esc(name)}…</h3><button class="danger-btn" id="callEnd">Cancel</button>`); $('callEnd').onclick = () => endCall(true);
+    call.off.push(window.firebaseOnValue(R(`calls/${id}/answer`), async s => {
+      const a = s.val();
+      if (a && call.pc === pc && !pc.currentRemoteDescription) { await pc.setRemoteDescription(a); call.q.splice(0).forEach(addCand); clearTimeout(call.timer); inCallUI(name); }
+    }));
+    call.timer = setTimeout(() => { if (call.pc === pc && !pc.currentRemoteDescription) { showToast('No answer'); endCall(true); } }, 40000);
+  } catch (e) { showToast('Could not start call'); endCall(true); }
+}
+function listenIncomingCalls() {
+  state.offs.push(window.firebaseOnValue(R(`incoming-calls/${state.me.uid}`), s => {
+    const c = s.val();
+    if (!c) { if (!call.pc) hideCall(); return; }
+    if (call.pc || state.blocked.has(c.from) || Date.now() - c.ts > 45000) return;
+    chime();
+    if (document.hidden && window.Notification && Notification.permission === 'granted') new Notification('Incoming call', { body: c.fromName });
+    callUI(`<h3>📞 ${esc(c.fromName)} is calling…</h3><div class="row"><button class="danger-btn" id="callDecline">Decline</button><button class="btn-primary" id="callAccept" style="margin-top:10px;">Accept</button></div>`);
+    $('callDecline').onclick = () => {
+      window.firebaseUpdate(R('calls/' + c.callId), { status: 'ended' }).catch(() => {});
+      window.firebaseRemove(R('incoming-calls/' + state.me.uid)); hideCall();
+    };
+    $('callAccept').onclick = () => acceptCall(c);
+  }));
+}
+async function acceptCall(c) {
+  try {
+    const d = (await window.firebaseGet(R('calls/' + c.callId))).val();
+    if (!d || d.status !== 'ringing') { hideCall(); return showToast('Call already ended'); }
+    const pc = await makePC(c.callId, 'callee', c.from);
+    await pc.setRemoteDescription(d.offer); call.q.splice(0).forEach(addCand);
+    const ans = await pc.createAnswer(); await pc.setLocalDescription(ans);
+    await window.firebaseUpdate(R('calls/' + c.callId), { answer: { type: ans.type, sdp: ans.sdp }, status: 'connected' });
+    window.firebaseRemove(R('incoming-calls/' + state.me.uid));
+    inCallUI(c.fromName);
+  } catch (e) { showToast('Call failed'); endCall(true); }
+}
+function endCall(write) {
+  clearTimeout(call.timer);
+  const { id, pc, peer, role } = call;
+  call.off.forEach(f => { try { f(); } catch (e) {} }); call.off = [];
+  if (call.stream) call.stream.getTracks().forEach(t => t.stop());
+  if (pc) pc.close();
+  Object.assign(call, { pc: null, stream: null, id: null, peer: null, role: null, q: [] });
+  $('remoteAudio').srcObject = null; hideCall();
+  if (write && id && state.me) {
+    window.firebaseUpdate(R('calls/' + id), { status: 'ended' }).catch(() => {});
+    if (role === 'caller') {
+      window.firebaseRemove(R('incoming-calls/' + peer)).catch(() => {});
+      setTimeout(() => window.firebaseRemove(R('calls/' + id)).catch(() => {}), 5000);
+    }
+  }
+}
+
+/* --- 7. Account deletion --- */
+$('btnDeleteAcct').onclick = async () => {
+  if (!confirm('Delete your account permanently? This cannot be undone.')) return;
+  if (!confirm('Really delete? Your profile, chat list and login will be erased.')) return;
+  const pw = prompt('Enter your password to confirm:'); if (!pw) return;
+  const u = window.firebaseAuth.currentUser, uid = u.uid;
+  try {
+    await window.firebaseReauth(u, window.firebaseEmailCred.credential(u.email, pw));
+    const upd = { [`users/${uid}`]: null, [`presence/${uid}`]: null, [`user-chats/${uid}`]: null, [`incoming-calls/${uid}`]: null };
+    Object.keys(state.chats).forEach(p => { upd[`user-chats/${p}/${uid}`] = null; });
+    if (state.presenceRef) await window.firebaseOnDisconnect(state.presenceRef).cancel();
+    teardown();
+    await window.firebaseUpdate(ROOT(), upd);
+    await window.firebaseDeleteUser(u);
+    state.me = null; showToast('Account deleted');
+  } catch (e) { showToast(e.code === 'auth/wrong-password' || e.code === 'auth/invalid-credential' ? 'Wrong password' : 'Delete failed: ' + e.message); }
+};
 </script>
+<script src="features-v3.js"></script>
+<script src="features-v4.js"></script>
+<script src="features-v5.js"></script>
 </body>
 </html>
