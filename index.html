@@ -1,687 +1,252 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>NammaChat - Chennai Local Meetups</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-app.js";
-import { getDatabase, ref, set, onValue, push, child, onChildAdded, onDisconnect, serverTimestamp, update, get } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-database.js";
-import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/10.13.1/firebase-auth.js";
+/* features-v3.js — load AFTER the main inline <script> (right before </body>).
+   Adds: 1) delete-on-read  2) admin login + dashboard  3) tiers  4) groups.
+   Reuses existing globals ($, R, ROOT, state, esc, showToast, showScreen, renderBody, chatKey...). */
+(() => {
+const FB = window;
 
-const firebaseConfig = {
-  apiKey: "AIzaSyB_1D5besvJG-0rX-RrcZZMpee38qSEvLs",
-  authDomain: "namma-alu-chat.firebaseapp.com",
-  databaseURL: "https://namma-alu-chat-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "namma-alu-chat",
-  storageBucket: "namma-alu-chat.firebasestorage.app",
-  messagingSenderId: "630785828889",
-  appId: "1:630785828889:web:9802af1d64dc7d55312288",
-  measurementId: "G-HNB7SEWT57"
+/* ============ 3. TIERS ============ */
+const TIERS = {
+  free:   { label: 'Free Plan', maxOwned: 1, maxJoined: 3,  maxMembers: 10,  history: 30,  cooldownMs: 3000, customCode: false },
+  paid19: { label: '₹19 Plan',  maxOwned: 5, maxJoined: 25, maxMembers: 100, history: 200, cooldownMs: 0,    customCode: true  }
 };
+const tier = () => TIERS[state.me && state.me.tier] || TIERS.free;
+FB.V3 = { TIERS, tier };
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const auth = getAuth(app);
-
-window.firebaseDB = db;
-window.firebaseAuth = auth;
-window.firebaseRef = ref;
-window.firebaseOnValue = onValue;
-window.firebasePush = push;
-window.firebaseChild = child;
-window.firebaseOnChildAdded = onChildAdded;
-window.firebaseOnDisconnect = onDisconnect;
-window.firebaseServerTimestamp = serverTimestamp;
-window.firebaseUpdate = update;
-window.firebaseGet = get;
-window.firebaseSet = set;
-window.firebaseCreateUser = createUserWithEmailAndPassword;
-window.firebaseSignIn = signInWithEmailAndPassword;
-window.firebaseOnAuthState = onAuthStateChanged;
-window.firebaseSignOut = signOut;
-window.firebaseUpdateProfile = updateProfile;
-
-window.addEventListener('DOMContentLoaded', initApp);
-</script>
-<style>
-*, *::before, *::after { box-sizing: border-box; }
-html, body { margin:0; padding:0; height:100%; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: #f3f4f6; }
-#app { max-width:480px; margin:0 auto; height:100%; display:flex; flex-direction:column; position:relative; background:#ffffff; }
-.header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; background: linear-gradient(90deg, #f59e0b, #d97706); color:#fff; font-weight:700; font-size:18px; position:sticky; top:0; z-index:50; box-shadow:0 2px 6px rgba(0,0,0,0.1); }
-.header button { background:rgba(255,255,255,0.2); border:none; color:#fff; padding:6px 12px; border-radius:6px; font-weight:600; font-size:13px; cursor:pointer; backdrop-filter: blur(4px); }
-.header button:hover { background:rgba(255,255,255,0.35); }
-.header .logout-btn { background:rgba(255,255,255,0.25); font-size:12px; padding:5px 10px; }
-.screen { flex:1; overflow-y:auto; display:none; padding:16px; }
-.screen.active { display:flex; flex-direction:column; }
-.form-group { margin-bottom:16px; }
-label { display:block; font-weight:600; margin-bottom:6px; color:#374151; font-size:14px; }
-input, select { width:100%; padding:12px 14px; border:1px solid #d1d5db; border-radius:10px; font-size:15px; background:#fff; }
-input:focus, select:focus { outline:none; border-color:#f59e0b; }
-.btn-primary { width:100%; padding:14px; background: linear-gradient(90deg, #f59e0b, #d97706); color:#fff; border:none; border-radius:12px; font-size:16px; font-weight:700; cursor:pointer; box-shadow:0 4px 14px rgba(245,158,11,0.35); }
-.btn-primary:disabled { opacity:0.6; cursor:not-allowed; }
-.btn-secondary { width:100%; padding:12px; background:#f3f4f6; color:#374151; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer; margin-top:10px; }
-.tab-bar { display:flex; background:#f3f4f6; border-radius:10px; margin-bottom:18px; overflow:hidden; }
-.tab-bar button { flex:1; padding:10px; border:none; background:transparent; font-weight:700; color:#6b7280; cursor:pointer; }
-.tab-bar button.active { background:#fff; color:#d97706; box-shadow:0 2px 6px rgba(0,0,0,0.05); border-radius:10px; }
-#map-setup { width:100%; height:280px; border-radius:12px; margin-bottom:12px; border:1px solid #e5e7eb; }
-.user-card { display:flex; align-items:center; gap:12px; padding:14px; background:#fff; border:1px solid #e5e7eb; border-radius:12px; margin-bottom:10px; cursor:pointer; transition: transform .1s, box-shadow .1s; }
-.user-card:active { transform: scale(0.98); }
-.avatar { width:48px; height:48px; border-radius:50%; background: linear-gradient(135deg, #f59e0b, #d97706); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:18px; flex-shrink:0; }
-.user-info { flex:1; }
-.user-name { font-weight:700; color:#111827; font-size:15px; }
-.user-meta { color:#6b7280; font-size:13px; margin-top:2px; }
-.distance-badge { background:#fef3c7; color:#92400e; padding:4px 10px; border-radius:20px; font-size:12px; font-weight:700; white-space:nowrap; }
-.chat-header { display:flex; align-items:center; gap:10px; padding-bottom:10px; border-bottom:1px solid #e5e7eb; margin-bottom:10px; }
-.chat-header .avatar { width:40px; height:40px; font-size:16px; }
-.chat-area { flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-bottom:8px; }
-.message { max-width:80%; padding:10px 14px; border-radius:16px; font-size:14px; line-height:1.35; }
-.message.me { align-self:flex-end; background:#f59e0b; color:#fff; border-bottom-right-radius:4px; }
-.message.them { align-self:flex-start; background:#f3f4f6; color:#111827; border-bottom-left-radius:4px; }
-.message .ts { font-size:11px; opacity:0.7; margin-top:4px; display:block; }
-.chat-input-wrap { display:flex; gap:8px; padding-top:8px; border-top:1px solid #e5e7eb; }
-.chat-input-wrap input { flex:1; }
-.chat-input-wrap button { padding:12px 18px; background:#111827; color:#fff; border:none; border-radius:10px; font-weight:700; cursor:pointer; }
-.safety-bar { display:flex; gap:8px; margin-bottom:10px; }
-.safety-bar button { flex:1; padding:8px; border:1px solid #e5e7eb; background:#fff; border-radius:8px; font-size:12px; font-weight:600; color:#374151; cursor:pointer; }
-.safety-bar button.danger { color:#ef4444; border-color:#fecaca; background:#fef2f2; }
-.back-btn { background:transparent; border:none; color:#fff; font-size:20px; cursor:pointer; padding:0 4px; }
-.empty-state { text-align:center; color:#9ca3af; padding:40px 20px; }
-.reveal-banner { background:#ecfdf5; border:1px solid #a7f3d0; color:#065f46; padding:10px 14px; border-radius:10px; font-size:13px; display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
-.reveal-banner button { background:#059669; color:#fff; border:none; border-radius:6px; padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer; }
-.toast { position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:#111827; color:#fff; padding:10px 18px; border-radius:8px; font-size:13px; z-index:100; opacity:0; pointer-events:none; transition: opacity .3s; }
-.toast.show { opacity:1; }
-.auth-hint { text-align:center; font-size:13px; color:#6b7280; margin-top:12px; }
-.auth-hint a { color:#d97706; font-weight:600; cursor:pointer; }
-.map-hint { font-size:12px; color:#6b7280; margin-bottom:12px; text-align:center; }
-.gps-btn { width:100%; padding:10px; background:#ecfdf5; color:#065f46; border:1px solid #a7f3d0; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; margin-bottom:12px; }
-.loc-info { background:#f3f4f6; padding:10px 14px; border-radius:8px; font-size:13px; color:#374151; margin-bottom:12px; word-break:break-all; }
-</style>
-</head>
-<body>
-<div id="app">
-  <div class="header" id="header">
-    <span style="display:flex;align-items:center;gap:8px;"><button class="back-btn" id="backBtn" style="display:none;">&#8592;</button> NammaChat</span>
-    <div style="display:flex;gap:8px;">
-      <button id="spotlightBtn">Spotlight Pass (₹19)</button>
-      <button class="logout-btn" id="logoutBtn" style="display:none;">Logout</button>
-    </div>
-  </div>
-
-  <!-- Screen 0: Auth (Login / Signup) -->
-  <div class="screen active" id="screen-auth">
-    <h2 style="margin-bottom:4px; color:#111827;">Welcome to NammaChat</h2>
-    <p style="color:#6b7280; font-size:14px; margin-bottom:18px;">Meet people around your neighborhood in Chennai anonymously.</p>
-
-    <div class="tab-bar">
-      <button id="tabLogin" class="active">Login</button>
-      <button id="tabSignup">Sign Up</button>
-    </div>
-
-    <div id="loginForm">
-      <div class="form-group">
-        <label for="loginEmail">Email</label>
-        <input id="loginEmail" type="email" placeholder="you@example.com" />
-      </div>
-      <div class="form-group">
-        <label for="loginPassword">Password</label>
-        <input id="loginPassword" type="password" placeholder="Your password" />
-      </div>
-      <button class="btn-primary" id="btnLogin">Login</button>
-      <p class="auth-hint">Don't have an account? <a id="goSignup">Sign up</a></p>
-    </div>
-
-    <div id="signupForm" style="display:none;">
-      <div class="form-group">
-        <label for="suEmail">Email</label>
-        <input id="suEmail" type="email" placeholder="you@example.com" />
-      </div>
-      <div class="form-group">
-        <label for="suPassword">Password</label>
-        <input id="suPassword" type="password" placeholder="Min 6 characters" />
-      </div>
-      <div class="form-group">
-        <label for="suDisplayName">Display Name</label>
-        <input id="suDisplayName" type="text" placeholder="e.g., ChennaiVibe" maxlength="20" />
-      </div>
-      <div class="form-group">
-        <label for="suNeighborhood">Neighborhood</label>
-        <select id="suNeighborhood">
-          <option value="" disabled selected>Select your area</option>
-          <option>Velachery</option>
-          <option>Adyar</option>
-          <option>OMR</option>
-          <option>Anna Nagar</option>
-          <option>T Nagar</option>
-          <option>Mylapore</option>
-          <option>Besant Nagar</option>
-          <option>Thiruvanmiyur</option>
-          <option>Guindy</option>
-          <option>Kodambakkam</option>
-          <option>Chromepet</option>
-          <option>Pallikaranai</option>
-          <option>Perambur</option>
-          <option>Ambattur</option>
-          <option>Nungambakkam</option>
-          <option>Kilpauk</option>
-          <option>Porur</option>
-          <option>Madhavaram</option>
-          <option>Other</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="suRadius">Distance Radius</label>
-        <select id="suRadius">
-          <option value="1">1 km</option>
-          <option value="3" selected>3 km</option>
-          <option value="5">5 km</option>
-          <option value="10">10 km</option>
-        </select>
-      </div>
-      <button class="btn-primary" id="btnSignup">Create Account</button>
-      <p class="auth-hint">Already have an account? <a id="goLogin">Login</a></p>
-    </div>
-
-    <p id="auth-status" style="font-size:12px; color:#ef4444; text-align:center; margin-top:10px;"></p>
-  </div>
-
-  <!-- Screen 1: Map / Location Setup -->
-  <div class="screen" id="screen-mapsetup">
-    <h3 style="margin-bottom:6px; color:#111827;">Set Your Location</h3>
-    <p class="map-hint">Tap anywhere on the map or use GPS to place your pin.</p>
-
-    <div id="map-setup"></div>
-    <div class="loc-info" id="locInfo">No location selected yet.</div>
-
-    <button class="gps-btn" id="btnUseGPS"><span style="font-size:16px;">&#127758;</span> Use My Current GPS Location</button>
-
-    <div class="form-group">
-      <label for="mapRadius">Distance Radius</label>
-      <select id="mapRadius">
-        <option value="1">1 km</option>
-        <option value="3" selected>3 km</option>
-        <option value="5">5 km</option>
-        <option value="10">10 km</option>
-      </select>
-    </div>
-
-    <button class="btn-primary" id="btnConfirmLoc">Confirm Location & Find People</button>
-    <p id="map-status" style="font-size:12px; color:#ef4444; text-align:center; margin-top:10px;"></p>
-  </div>
-
-  <!-- Screen 2: Nearby Users -->
-  <div class="screen" id="screen-users">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <h3 style="margin:0; color:#111827;">People Near You</h3>
-      <button class="btn-secondary" id="btnChangeLoc" style="width:auto;padding:6px 12px;margin:0;font-size:12px;">Change Location</button>
-    </div>
-    <p style="font-size:13px; color:#6b7280; margin-bottom:14px;">Filtered by your radius. Tap to chat anonymously.</p>
-    <div id="users-list"></div>
-  </div>
-
-  <!-- Screen 3: Chat -->
-  <div class="screen" id="screen-chat">
-    <div class="chat-header" id="chatHeader"></div>
-    <div class="safety-bar">
-      <button id="btnReveal">Request Profile Reveal</button>
-      <button class="danger" id="btnReport">Report</button>
-      <button class="danger" id="btnBlock">Block</button>
-    </div>
-    <div id="revealBanner"></div>
-    <div class="chat-area" id="chatArea"></div>
-    <div class="chat-input-wrap">
-      <input id="msgInput" type="text" placeholder="Type a message..." />
-      <button id="btnSend">Send</button>
-    </div>
-  </div>
+/* ============ UI injection ============ */
+document.head.insertAdjacentHTML('beforeend', '<style>.v3-chips{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}.v3-chips button{border:1px solid #e5e7eb;background:#fff;border-radius:20px;padding:6px 12px;font-size:12px;font-weight:700;color:#6b7280;cursor:pointer}.v3-chips button.on{background:#fef3c7;color:#92400e;border-color:#f59e0b}.v3-tier{width:auto;padding:6px;font-size:12px}.v3-row{display:flex;gap:8px;margin-bottom:10px}.v3-row input{flex:1;min-width:0}.v3-row button{width:auto;padding:0 16px;margin:0}</style>');
+$('screen-auth').insertAdjacentHTML('beforeend', '<p class="auth-hint"><a id="goAdmin">Admin login</a></p>');
+$('app').insertAdjacentHTML('beforeend', `
+<div class="screen" id="screen-adminlogin">
+  <h2 style="color:#111827;margin-top:0">Admin Login</h2>
+  <div class="form-group"><label for="alEmail">Admin email</label><input id="alEmail" type="email"></div>
+  <div class="form-group"><label for="alPw">Password</label><input id="alPw" type="password"></div>
+  <button class="btn-primary" id="alBtn">Sign in as admin</button>
+  <button class="btn-secondary" id="alBack">Back to user login</button>
+  <p id="alStatus" style="font-size:12px;color:#ef4444;text-align:center"></p>
 </div>
-<div class="toast" id="toast"></div>
+<div class="screen" id="screen-groups">
+  <h3 style="margin:0 0 4px;color:#111827">Groups</h3>
+  <p class="map-hint" id="gTier" style="text-align:left"></p>
+  <div class="v3-row"><input id="gName" maxlength="30" placeholder="New group name"><input id="gCustom" maxlength="12" placeholder="Custom code" style="max-width:120px"><button class="btn-primary" id="gCreate">Create</button></div>
+  <div class="v3-row"><input id="gCode" maxlength="12" placeholder="Invite code"><button class="btn-primary" id="gJoin">Join</button></div>
+  <div id="g-list"></div>
+</div>
+<div class="screen" id="screen-group">
+  <div class="chat-header"><div style="flex:1"><div id="gTitle" style="font-weight:700"></div><div id="gSub" style="font-size:12px;color:#6b7280"></div></div><button class="icon-btn" id="gShare" title="Copy invite link">🔗</button><button class="icon-btn" id="gLeave" title="Leave group">🚪</button></div>
+  <div class="chat-area" id="gArea"></div>
+  <div class="chat-input-wrap"><input id="gMsg" maxlength="500" placeholder="Message the group..."><button id="gSend">Send</button></div>
+</div>`);
+document.querySelector('#navbar [data-go=settings]').insertAdjacentHTML('beforebegin', '<button data-go="groups">Groups</button>');
+document.querySelector('#navbar [data-go=groups]').onclick = () => showScreen('groups');
+$('btnNotif').insertAdjacentHTML('beforebegin', '<div class="loc-info" id="v3Tier"></div>');
 
-<script>
-/* === UTILITIES === */
-const $ = id => document.getElementById(id);
-const showToast = text => {
-  const t = $('toast'); t.textContent = text; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2500);
+/* ============ Hooks ============ */
+const _show = showScreen;
+FB.showScreen = name => {
+  _show(name);
+  if (name === 'groups') $('navbar').style.display = 'flex';
+  if (name === 'group') $('backBtn').style.display = 'inline-block';
+  if (name === 'adminlogin') $('logoutBtn').style.display = 'none';
 };
-function haversine(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-}
+const _back = $('backBtn'].onclick;
+$('backBtn').onclick = e =>$('screen-group').classList.contains('active') ? (closeRoom(), showScreen('groups')) : _back(e);
 
-/* === APP STATE === */
-const state = {
-  me: null, // { uid, name, area, lat, lng, radius, spotlight, email }
-  map: null, circle: null, pin: null,
-  users: [],
-  activeChatUid: null,
-  blocked: new Set(JSON.parse(localStorage.getItem('namma_blocked')||'[]')),
-  revealRequests: new Set(JSON.parse(localStorage.getItem('namma_reveals')||'[]')),
-  presenceRef: null,
-  authUid: null,
+const _enter = enterApp;
+FB.enterApp = () => {
+  const first = !state.entered;
+  _enter();
+  if (!first) return;
+  const uid = state.me.uid;
+  state.offs.push(FB.firebaseOnValue(R(`users/${uid}/tier`), s => {
+    state.me.tier = s.val() || 'free';
+    $('v3Tier').textContent = 'Plan: ' + tier().label;
+    $('gTier').textContent = `${tier().label}: own ${tier().maxOwned}, join ${tier().maxJoined}, ${tier().maxMembers} members/group`;
+  }));
+  state.offs.push(FB.firebaseOnValue(R('user-groups/' + uid), s => { myGroups = s.val() || {}; renderGroups(); }));
+  state.offs.push(() => { closeRoom(); pend.clear(); });
+  if (state.isAdmin && FB.__goAdmin) { FB.__goAdmin = false; showScreen('admin'); }
+  const c = new URLSearchParams(location.search).get('join');
+  if (c) { history.replaceState(null, '', location.pathname); showScreen('groups'); $('gCode').value = c.toUpperCase(); showToast('Tap Join to enter the group'); }
 };
 
-/* === SCREEN NAVIGATION === */
-function showScreen(name) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  $(`screen-${name}`).classList.add('active');
-  const onAuth = name !== 'auth';
-  $('backBtn').style.display = (onAuth && name !== 'users') ? 'inline-block' : 'none';
-  $('logoutBtn').style.display = onAuth ? 'inline-block' : 'none';
+/* ============ 1. DELETE-ON-READ (Bi-directional & Permanent) ============ */
+const BUFFER = 2000, pend = new Map();
+let online = false;
+const disarm = k => { const p = pend.get(k); if (p) { clearTimeout(p.t); p.t = null; } };
+const ready = p => online && document.visibilityState === 'visible' && state.activeChatUid === p.peer && $('screen-chat').classList.contains('active');
+const arm = k => { const p = pend.get(k); if (!p) return; disarm(k); if (ready(p)) p.t = setTimeout(() => fire(k), BUFFER); };
+async function fire(k) {
+  const p = pend.get(k); if (!p) return;
+  if (!ready(p)) return disarm(k);
+  try { await FB.firebaseRemove(R(p.path)); pend.delete(k); }
+  catch (e) { disarm(k); if (++p.tries < 3) setTimeout(() => arm(k), 5000); else pend.delete(k); }
 }
-$('backBtn').onclick = () => {
-  if ($('screen-chat').classList.contains('active')) showScreen('users');
-  else if ($('screen-mapsetup').classList.contains('active')) { /* stay or go to users if has loc */ }
-  else showScreen('users');
+const rearm = () => pend.forEach((_, k) => (online && document.visibilityState === 'visible') ? arm(k) : disarm(k));
+document.addEventListener('visibilitychange', rearm);
+addEventListener('DOMContentLoaded', () => FB.firebaseOnValue(R('.info/connected'), s => { online = s.val() === true; rearm(); }));
+
+const _append = appendMessage;
+FB.appendMessage = m => {
+  _append(m);
+  if (m._k && state.me && m.from !== state.me.uid && state.activeChatUid) {
+    pend.set(m._k, { path: chatKey(state.me.uid, state.activeChatUid) + '/messages/' + m._k, peer: state.activeChatUid, t: null, tries: 0 });
+    arm(m._k);
+  }
+};
+const _open = openChat;
+FB.openChat = uid => { pend.forEach((_, k) => disarm(k)); pend.clear(); _open(uid); };
+
+/* ============ 2. ADMIN LOGIN + DASHBOARD ============ */
+$('goAdmin').onclick = () => showScreen('adminlogin');
+$('alBack').onclick = () => showScreen('auth');$('alBtn').onclick = async () => {
+  const st = $('alStatus'); st.textContent = '';
+  if (!($('alEmail').value.trim()) \vert{}\vert{} !$('alPw').value) { st.textContent = 'Enter email and password.'; return; }
+  FB.__signingUp = true;
+  try {
+    const { user } = await FB.firebaseSignIn(FB.firebaseAuth, $('alEmail').value.trim(),$('alPw').value);
+    if ((await FB.firebaseGet(R('admins/' + user.uid))).val() !== true) { await FB.firebaseSignOut(FB.firebaseAuth); throw new Error('This account is not an admin.'); }
+    FB.__signingUp = false; FB.__goAdmin = true; $('alPw').value = '';
+    await routeUser(user);
+  } catch (e) { FB.__signingUp = false; st.textContent = e.message; showToast(e.message); }
 };
 
-/* === MAP SETUP === */
-function initMap() {
-  if (state.map) return;
-  state.map = L.map('map-setup', { zoomControl: false }).setView([13.0827, 80.2707], 12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(state.map);
-  L.control.zoom({ position: 'bottomright' }).addTo(state.map);
+let adminUsers = {}, adminFilter = 'pending';
+const stOf = u => u.status || 'pending';
+FB.listenAdmin = () => state.offs.push(FB.firebaseOnValue(R('users'), s => { adminUsers = s.val() || {}; renderAdmin(); }));
 
-  state.map.on('click', e => {
-    const { lat, lng } = e.latlng;
-    state.me = state.me || {};
-    state.me.lat = lat;
-    state.me.lng = lng;
-    updateMapCircle(lat, lng, parseFloat($('mapRadius').value));
-    $('locInfo').textContent = `Lat: ${lat.toFixed(5)}, Lng: ${lng.toFixed(5)}`;
-    $('map-status').textContent = '';
-  });
+function renderAdmin() {
+  const all = Object.entries(adminUsers).filter(([id]) => id !== state.me.uid);
+  const cnt = f => all.filter(([, u]) => f === 'all' || stOf(u) === f).length;
+  const rows = all.filter(([, u]) => adminFilter === 'all' || stOf(u) === adminFilter);
+  
+  $('admin-list').innerHTML = '<div class="v3-chips">' + ['pending', 'approved', 'rejected', 'all'].map(f => `<button data-f="${f}" class="${f === adminFilter ? 'on' : ''}">${f.toUpperCase()} (${cnt(f)})</button>`).join('') + '</div>' +
+    (rows.length ? rows.map(([id, u]) => `
+      <div class="user-card" style="cursor:default;flex-wrap:wrap">
+        <div class="avatar">${esc((u.name || '?')[0].toUpperCase())}</div>
+        <div class="user-info" data-prof="${id}" style="cursor:pointer">
+          <div class="user-name">
+            ${esc(u.name || '')} 
+            <span style="font-size:10px; padding:2px 6px; border-radius:6px; margin-left:6px; background:${stOf(u) === 'approved' ? '#ecfdf5; color:#065f46;' : stOf(u) === 'rejected' ? '#fef2f2; color:#ef4444;' : '#fef3c7; color:#92400e;'}">
+              ${stOf(u).toUpperCase()}
+            </span>
+          </div>
+          <div class="user-meta">${esc(u.email || '')} · ${esc(u.area || '')}</div>
+        </div>
+        <select class="v3-tier" data-t="${id}">${Object.entries(TIERS).map(([k, t]) => `<option value="${k}"${(u.tier \vert{}\vert{} 'free') === k ? ' selected' : ''}>${t.label}</option>`).join('')}</select>
+        ${stOf(u) !== 'approved' ? `<button class="mini ok" data-id="${id}" data-s="approved">Approve</button>` : ''}
+        ${stOf(u) !== 'rejected' ? `<button class="mini no" data-id="${id}" data-s="rejected">Reject</button>` : ''}
+      </div>`).join('') : '<div class="empty-state">No users found under this filter.</div>');
 }
 
-function updateMapCircle(lat, lng, radiusKm) {
-  if (!state.map) initMap();
-  if (state.pin) state.map.removeLayer(state.pin);
-  if (state.circle) state.map.removeLayer(state.circle);
-  state.pin = L.marker([lat, lng]).addTo(state.map).bindPopup('You are here').openPopup();
-  state.circle = L.circle([lat, lng], { radius: radiusKm*1000, color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.25, weight: 2 }).addTo(state.map);
-  state.map.fitBounds(state.circle.getBounds(), { padding: [20,20] });
+const upd = (id, v, msg) => FB.firebaseUpdate(R('users/' + id), v).then(() => showToast(msg)).catch(e => showToast(e.message));
+$('admin-list').onclick = e => {
+  const b = e.target.closest('button'), pr = e.target.closest('[data-prof]');
+  if (b && b.dataset.f) { adminFilter = b.dataset.f; return renderAdmin(); }
+  if (b && b.dataset.s) return upd(b.dataset.id, { status: b.dataset.s }, 'Marked ' + b.dataset.s);
+  if (pr) {
+    const u = adminUsers[pr.dataset.prof] || {};
+    $('modalBody').innerHTML = `<div class="avatar" style="margin:0 auto 8px">${esc((u.name || '?')[0].toUpperCase())}</div><h3 style="margin:0">${esc(u.name || '')}</h3><p class="user-meta">${esc(u.email || '')} · ${esc(u.area || 'Unknown area')}</p><p style="font-size:14px;color:#374151">${esc(u.bio || 'No bio.')}</p><p class="user-meta">Radius ${+u.radius || '?'} km · ${stOf(u)} · ${(TIERS[u.tier] || TIERS.free).label}</p><button class="btn-secondary" id="mClose">Close</button>`;
+    $('modal').classList.add('open'); $('mClose').onclick = () =>$('modal').classList.remove('open');
+  }
+};
+$('admin-list').onchange = e => { if (e.target.dataset.t) upd(e.target.dataset.t, { tier: e.target.value }, 'Plan set: ' + TIERS[e.target.value].label); };
+
+/* ============ 4. GROUPS ============ */
+let myGroups = {}, curGid = null, gOff = null, lastSend = 0;
+const CODE_RE = /^[A-Z0-9]{4,12}$/, ALPHA = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const rndCode = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), b => ALPHA[b % 32]).join('');
+function renderGroups() {
+  const l = Object.entries(myGroups);
+  $('g-list').innerHTML = l.length ? l.map(([id, g]) => `<div class="user-card" data-g="${id}"><div class="avatar">${esc((g.name || '?')[0].toUpperCase())}</div><div class="user-info"><div class="user-name">${esc(g.name || '')}</div><div class="user-meta">${g.role === 'owner' ? 'Owner' : 'Member'} · code ${esc(g.code || '')}</div></div></div>`).join('') : '<div class="empty-state">No groups yet.<br><span style="font-size:13px">Create one or join with a code.</span></div>';
 }
+$('g-list').onclick = e => { const c = e.target.closest('[data-g]'); if (c) openGroup(c.dataset.g); };
+function closeRoom() { if (gOff) { gOff(); gOff = null; } curGid = null; }
 
-/* === GEOLOCATION === */
-function getLocation() {
-  return new Promise((res, rej) => {
-    if (!navigator.geolocation) return rej('Geolocation not supported.');
-    navigator.geolocation.getCurrentPosition(
-      pos => res({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      err => rej(err.message || 'Location access denied.'),
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
-  });
-}
-
-/* === FIREBASE / PRESENCE === */
-function presenceKey(uid) { return `presence/${uid}`; }
-function userProfileKey(uid) { return `users/${uid}`; }
-function chatKey(a, b) { return a < b ? `chats/${a}_${b}` : `chats/${b}_${a}`; }
-
-function setPresence(user) {
-  const pRef = window.firebaseRef(window.firebaseDB, presenceKey(user.uid));
-  window.firebaseSet(pRef, { name: user.name, area: user.area, lat: user.lat, lng: user.lng, radius: user.radius, spotlight: user.spotlight||false, online: true, ts: Date.now() });
-  const disc = window.firebaseOnDisconnect(pRef);
-  disc.update({ online: false, ts: Date.now() });
-  state.presenceRef = pRef;
-}
-
-function saveUserProfile(user) {
-  const uRef = window.firebaseRef(window.firebaseDB, userProfileKey(user.uid));
-  window.firebaseSet(uRef, { name: user.name, area: user.area, radius: user.radius, spotlight: user.spotlight||false, lat: user.lat, lng: user.lng, email: user.email, ts: Date.now() });
-}
-
-function loadUserProfile(uid) {
-  return window.firebaseGet(window.firebaseRef(window.firebaseDB, userProfileKey(uid))).then(snap => snap.val());
-}
-
-function listenNearby() {
-  const presRef = window.firebaseRef(window.firebaseDB, 'presence');
-  window.firebaseOnValue(presRef, snap => {
-    const all = snap.val() || {};
-    const arr = [];
-    Object.entries(all).forEach(([uid, data]) => {
-      if (uid === state.me.uid) return;
-      if (state.blocked.has(uid)) return;
-      if (!data.lat || !data.lng || !state.me.lat || !state.me.lng) return;
-      const d = haversine(state.me.lat, state.me.lng, data.lat, data.lng);
-      if (d <= state.me.radius) arr.push({ uid, ...data, distanceKm: d });
+$('gCreate').onclick = async () => {
+  const name = $('gName').value.trim().slice(0, 30), t = tier(), mine = Object.values(myGroups);
+  let code = $('gCustom').value.trim().toUpperCase();
+  if (!name) return showToast('Enter a group name');
+  if (mine.filter(g => g.role === 'owner').length >= t.maxOwned) return showToast(`${t.label}: max ${t.maxOwned} owned group(s).`);
+  if (mine.length >= t.maxJoined) return showToast(`${t.label}: max ${t.maxJoined} groups`);
+  if (code && !t.customCode) return showToast('Custom codes need the ₹19 Plan');
+  if (code && !CODE_RE.test(code)) return showToast('Code: 4–12 letters or digits');
+  code = code || rndCode();
+  const uid = state.me.uid, ts = Date.now(), gid = FB.firebasePush(R('groups')).key;
+  try {
+    await FB.firebaseUpdate(ROOT(), {
+      [`group-codes/${code}`]: { gid, name, owner: uid, max: t.maxMembers, n: 1 },
+      [`groups/${gid}`]: { name, owner: uid, code, ts },
+      [`group-members/${gid}/${uid}`]: { name: state.me.name, ts },
+      [`user-groups/${uid}/${gid}`]: { name, code, role: 'owner', ts }
     });
-    arr.sort((a,b) => a.distanceKm - b.distanceKm);
-    state.users = arr;
-    renderUsers();
-  });
-}
-
-function renderUsers() {
-  const box = $('users-list');
-  if (!state.users.length) {
-    box.innerHTML = `<div class="empty-state">No one nearby right now.<br><span style="font-size:13px;">Try increasing your radius.</span></div>`; return;
-  }
-  box.innerHTML = state.users.map(u => {
-    const spotlight = u.spotlight ? ' <span style="color:#f59e0b;">★</span>' : '';
-    return `<div class="user-card" data-uid="${u.uid}">
-      <div class="avatar">${u.name ? u.name[0].toUpperCase() : '?'}</div>
-      <div class="user-info">
-        <div class="user-name">${u.name}${spotlight}</div>
-        <div class="user-meta">${u.area} · ${u.online ? '<span style="color:#059669;">Online</span>' : 'Offline'}</div>
-      </div>
-      <div class="distance-badge">${u.distanceKm.toFixed(1)} km</div>
-    </div>`;
-  }).join('');
-  document.querySelectorAll('.user-card').forEach(card => {
-    card.onclick = () => openChat(card.dataset.uid);
-  });
-}
-
-/* === CHAT === */
-let chatListenerOff = null;
-let revealListenerOff = null;
-
-function openChat(uid) {
-  state.activeChatUid = uid;
-  const them = state.users.find(u => u.uid === uid) || { name: 'User' };
-  $('chatHeader').innerHTML = `<div class="avatar">${them.name ? them.name[0].toUpperCase() : '?'}</div><div><div style="font-weight:700;">${them.name}</div><div style="font-size:12px;color:#6b7280;">${them.online ? 'Online' : 'Offline'}</div></div>`;
-  $('chatArea').innerHTML = '';
-  $('revealBanner').innerHTML = '';
-  showScreen('chat');
-  $('msgInput').focus();
-
-  if (chatListenerOff) { chatListenerOff(); chatListenerOff = null; }
-  if (revealListenerOff) { revealListenerOff(); revealListenerOff = null; }
-
-  const chatPath = chatKey(state.me.uid, uid);
-  const messagesRef = window.firebaseRef(window.firebaseDB, chatPath + '/messages');
-  chatListenerOff = window.firebaseOnChildAdded(messagesRef, snap => {
-    const m = snap.val();
-    if (!m) return;
-    appendMessage(m);
-  });
-
-  const rid = [state.me.uid, uid].sort().join('_');
-  if (state.revealRequests.has(rid)) renderRevealBanner('pending');
-
-  const revealRef = window.firebaseRef(window.firebaseDB, chatPath + '/reveal');
-  revealListenerOff = window.firebaseOnValue(revealRef, snap => {
-    const val = snap.val();
-    if (!val) return;
-    if (val.from === uid && val.to === state.me.uid) {
-      if (val.status === 'requested') renderRevealBanner('incoming', uid);
-      if (val.status === 'accepted') renderRevealBanner('accepted', uid);
-    }
-    if (val.from === state.me.uid && val.to === uid && val.status === 'accepted') {
-      renderRevealBanner('accepted');
-    }
-  });
-}
-
-function appendMessage(m) {
-  const div = document.createElement('div');
-  div.className = 'message ' + (m.from === state.me.uid ? 'me' : 'them');
-  const time = new Date(m.ts).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' });
-  div.innerHTML = `<div>${escapeHtml(m.text)}</div><span class="ts">${time}</span>`;
-  $('chatArea').appendChild(div);
-  $('chatArea').scrollTop = $('chatArea').scrollHeight;
-}
-function escapeHtml(t) { return t.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-function sendMessage() {
-  const text = $('msgInput').value.trim();
-  if (!text || !state.activeChatUid) return;
-  const chatPath = chatKey(state.me.uid, state.activeChatUid);
-  const msgRef = window.firebaseRef(window.firebaseDB, chatPath + '/messages');
-  window.firebasePush(msgRef, { from: state.me.uid, text, ts: Date.now() });
-  $('msgInput').value = '';
-}
-$('btnSend').onclick = sendMessage;
-$('msgInput').addEventListener('keydown', e => { if (e.key === 'Enter') sendMessage(); });
-
-/* === REVEAL === */
-function renderRevealBanner(mode, fromUid) {
-  const banner = $('revealBanner');
-  if (mode === 'pending') {
-    banner.innerHTML = `<span>Reveal request sent. Waiting for response...</span>`;
-  } else if (mode === 'incoming') {
-    banner.innerHTML = `<span>They want to reveal profiles.</span><button id="btnAcceptReveal">Accept</button>`;
-    $('btnAcceptReveal').onclick = () => acceptReveal(fromUid);
-  } else if (mode === 'accepted') {
-    banner.innerHTML = `<span>Profiles revealed! You can now see real names.</span>`;
-  }
-}
-function requestReveal() {
-  if (!state.activeChatUid) return;
-  const rid = [state.me.uid, state.activeChatUid].sort().join('_');
-  state.revealRequests.add(rid);
-  localStorage.setItem('namma_reveals', JSON.stringify([...state.revealRequests]));
-  const chatPath = chatKey(state.me.uid, state.activeChatUid);
-  window.firebaseUpdate(window.firebaseRef(window.firebaseDB, chatPath + '/reveal'), { from: state.me.uid, to: state.activeChatUid, status: 'requested', ts: Date.now() });
-  renderRevealBanner('pending');
-  showToast('Profile reveal requested');
-}
-function acceptReveal(fromUid) {
-  const chatPath = chatKey(state.me.uid, fromUid);
-  window.firebaseUpdate(window.firebaseRef(window.firebaseDB, chatPath + '/reveal'), { from: state.me.uid, to: fromUid, status: 'accepted', ts: Date.now() });
-  renderRevealBanner('accepted');
-  showToast('Profile revealed');
-}
-$('btnReveal').onclick = requestReveal;
-
-/* === SAFETY === */
-$('btnBlock').onclick = () => {
-  if (!state.activeChatUid) return;
-  if (!confirm('Block this user? You won\'t see them again.')) return;
-  state.blocked.add(state.activeChatUid);
-  localStorage.setItem('namma_blocked', JSON.stringify([...state.blocked]));
-  showToast('User blocked');
-  showScreen('users');
-};
-$('btnReport').onclick = () => {
-  if (!state.activeChatUid) return;
-  const reason = prompt('Report reason (spam / abuse / other):');
-  if (!reason) return;
-  const reportRef = window.firebaseRef(window.firebaseDB, 'reports/' + Date.now());
-  window.firebaseSet(reportRef, { reporter: state.me.uid, reported: state.activeChatUid, reason, ts: Date.now() });
-  showToast('Report submitted. Thank you.');
+    $('gName').value =$('gCustom').value = ''; showToast('Group created · code ' + code);
+  } catch (e) { showToast('Code already taken — try another'); }
 };
 
-/* === SPOTLIGHT / RAZORPAY === */
-$('spotlightBtn').onclick = () => {
-  if (!state.me) { showToast('Complete setup first'); return; }
-  const options = {
-    key: 'rzp_test_dummyKeyForDemo',
-    amount: 1900,
-    currency: 'INR',
-    name: 'NammaChat',
-    description: 'Spotlight Pass - Boost visibility across Chennai',
-    image: '',
-    handler: function (response) {
-      state.me.spotlight = true;
-      setPresence(state.me);
-      saveUserProfile(state.me);
-      showToast('Spotlight activated! Your profile is now boosted.');
-    },
-    prefill: { name: state.me?.name || '' },
-    theme: { color: '#f59e0b' }
-  };
+const joinByCode = async raw => {
+  const code = String(raw || '').trim().toUpperCase();
+  if (!CODE_RE.test(code)) return showToast('Enter a valid invite code');
   try {
-    const rzp = new Razorpay(options);
-    rzp.open();
-  } catch (e) {
-    showToast('Razorpay SDK error (demo key). In production, use real key.');
-    console.error(e);
-  }
+    const c = (await FB.firebaseGet(R('group-codes/' + code))).val();
+    if (!c) return showToast('No group with that code');
+    if (myGroups[c.gid]) return openGroup(c.gid);
+    if (Object.keys(myGroups).length >= tier().maxJoined) return showToast(`${tier().label}: max ${tier().maxJoined} groups`);
+    if (c.n >= c.max) return showToast('This group is full');
+    const uid = state.me.uid, ts = Date.now();
+    await FB.firebaseUpdate(ROOT(), {
+      [`group-codes/${code}/n`]: FB.firebaseIncrement(1),
+      [`group-members/${c.gid}/${uid}`]: { name: state.me.name, ts },
+      [`user-groups/${uid}/${c.gid}`]: { name: c.name, code, role: 'member', ts }
+    });
+    $('gCode').value = ''; showToast('Joined ' + c.name);
+    myGroups[c.gid] = { name: c.name, code, role: 'member', ts }; openGroup(c.gid);
+  } catch (e) { showToast('Could not join: ' + e.message); }
 };
+$('gJoin').onclick = () => joinByCode($('gCode').value);
 
-/* === AUTH HANDLERS === */
-function showAuthTab(tab) {
-  if (tab === 'login') {
-    $('loginForm').style.display = 'block';
-    $('signupForm').style.display = 'none';
-    $('tabLogin').classList.add('active');
-    $('tabSignup').classList.remove('active');
-  } else {
-    $('loginForm').style.display = 'none';
-    $('signupForm').style.display = 'block';
-    $('tabLogin').classList.remove('active');
-    $('tabSignup').classList.add('active');
-  }
-  $('auth-status').textContent = '';
-}
-$('tabLogin').onclick = () => showAuthTab('login');
-$('tabSignup').onclick = () => showAuthTab('signup');
-$('goSignup').onclick = () => showAuthTab('signup');
-$('goLogin').onclick = () => showAuthTab('login');
-
-$('btnLogin').onclick = async () => {
-  const email = $('loginEmail').value.trim();
-  const password = $('loginPassword').value;
-  const status = $('auth-status');
-  if (!email || !password) { status.textContent = 'Enter email and password.'; return; }
-  status.style.color = '#059669';
-  status.textContent = 'Logging in...';
-  try {
-    await window.firebaseSignIn(window.firebaseAuth, email, password);
-    status.textContent = '';
-  } catch (err) {
-    status.style.color = '#ef4444';
-    status.textContent = err.message;
-  }
-};
-
-$('btnSignup').onclick = async () => {
-  const email = $('suEmail').value.trim();
-  const password = $('suPassword').value;
-  const name = $('suDisplayName').value.trim();
-  const area = $('suNeighborhood').value;
-  const radius = parseFloat($('suRadius').value);
-  const status = $('auth-status');
-
-  if (!email || !password || !name || !area) { status.style.color='#ef4444'; status.textContent = 'Fill all fields.'; return; }
-  if (password.length < 6) { status.style.color='#ef4444'; status.textContent = 'Password must be 6+ characters.'; return; }
-
-  status.style.color = '#059669';
-  status.textContent = 'Creating account...';
-  try {
-    const cred = await window.firebaseCreateUser(window.firebaseAuth, email, password);
-    const uid = cred.user.uid;
-    await window.firebaseUpdateProfile(cred.user, { displayName: name });
-    // Save profile to DB (location will be set next screen)
-    const profile = { uid, email, name, area, radius, spotlight: false, lat: null, lng: null };
-    await window.firebaseSet(window.firebaseRef(window.firebaseDB, userProfileKey(uid)), profile);
-    status.textContent = '';
-    // Handled by onAuthStateChanged
-  } catch (err) {
-    status.style.color = '#ef4444';
-    status.textContent = err.message;
-  }
-};
-
-$('logoutBtn').onclick = async () => {
-  if (state.presenceRef) {
-    await window.firebaseUpdate(state.presenceRef, { online: false, ts: Date.now() });
-  }
-  await window.firebaseSignOut(window.firebaseAuth);
-  state.me = null;
-  state.authUid = null;
-  state.users = [];
-  if (state.map) { state.map.remove(); state.map = null; state.pin = null; state.circle = null; }
-  showScreen('auth');
-  showAuthTab('login');
-  showToast('Logged out');
-};
-
-/* === MAP / LOCATION SETUP === */
-$('btnUseGPS').onclick = async () => {
-  const status = $('map-status');
-  status.style.color = '#059669';
-  status.textContent = 'Getting GPS location...';
-  try {
-    const loc = await getLocation();
-    state.me = state.me || {};
-    state.me.lat = loc.lat;
-    state.me.lng = loc.lng;
-    const r = parseFloat($('mapRadius').value);
-    updateMapCircle(loc.lat, loc.lng, r);
-    $('locInfo').textContent = `Lat: ${loc.lat.toFixed(5)}, Lng: ${loc.lng.toFixed(5)} (GPS)`;
-    status.textContent = 'GPS location set!';
-  } catch (err) {
-    status.style.color = '#ef4444';
-    status.textContent = 'GPS error: ' + err;
-  }
-};
-
-$('mapRadius').addEventListener('change', () => {
-  if (!state.me || !state.me.lat) return;
-  const r = parseFloat($('mapRadius').value);
-  updateMapCircle(state.me.lat, state.me.lng, r);
-});
-
-$('btnConfirmLoc').onclick = async () => {
-  if (!state.me || !state.me.lat || !state.me.lng) {
-    $('map-status').style.color = '#ef4444';
-    $('map-status').textContent = 'Please select a location on the map or use GPS.';
-    return;
-  }
-  const radius = parseFloat($('mapRadius').value);
-  state.me.radius = radius;
-  // Update profile in DB
-  await window.firebaseUpdate(window.firebaseRef(window.firebaseDB, userProfileKey(state.me.uid)), { lat: state.me.lat, lng: state.me.lng, radius });
-  setPresence(state.me);
-  listenNearby();
-  showScreen('users');
-};
-
-$('btnChangeLoc').onclick = () => {
-  showScreen('mapsetup');
-  initMap();
-  if (state.me && state.me.lat) {
-    updateMapCircle(state.me.lat, state.me.lng, state.me.radius);
-    $('locInfo').textContent = `Lat: ${state.me.lat.toFixed(5)}, Lng: ${state.me.lng.toFixed(5)}`;
-    $('mapRadius').value = state.me.radius;
-  }
-};
-
-/* === APP INIT === */
-function initApp() {
-  initMap();
-  if (state.map) state.map.setView([13.0827, 80.2707], 12);
-
-  window.firebaseOnAuthState(window.firebaseAuth, async user => {
-    if (user) {
-      state.authUid = user.uid;
-      const profile = await loadUserProfile(user.uid);
-      if (profile) {
-        state.me = { ...profile, uid: user.uid };
-        if (profile.lat && profile.lng) {
-          // Has location, go straight to users
-          setPresence(state.me);
-          listenNearby();
-          showScreen('users');
-        } else {
-          // New user, needs location
-          showScreen('mapsetup');
-          initMap();
-        }
-      } else {
-        // Profile missing somehow
-        showScreen('mapsetup');
-        initMap();
-      }
-    } else {
-      showScreen('auth');
-      showAuthTab('login');
-    }
+function openGroup(gid) {
+  const g = myGroups[gid]; if (!g) return;
+  closeRoom(); curGid = gid; $('gArea').innerHTML = '';
+  $('gTitle').textContent = g.name; $('gSub').textContent = 'Invite code: ' + g.code;
+  showScreen('group');
+  const offAdd = FB.firebaseOnChildAdded(FB.firebaseQuery(R('group-messages/' + gid), FB.firebaseLimitToLast(tier().history)), s => {
+    const m = s.val(); if (!m) return;
+    const mine = m.from === state.me.uid, d = document.createElement('div');
+    d.className = 'message ' + (mine ? 'me' : 'them');
+    d.innerHTML = (mine ? '' : `<b style="font-size:12px">${esc(m.name || 'User')}</b>`) + renderBody(m) + `<span class="ts">${new Date(m.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>`;
+    $('gArea').appendChild(d); $('gArea').scrollTop =$('gArea').scrollHeight;
+    if (FB.V3.gmsg) FB.V3.gmsg(gid, s.key, m, d);
   });
+  const offDel = FB.firebaseOnChildRemoved(R('group-messages/' + gid), s => FB.V3.gdel && FB.V3.gdel(s.key));
+  if (FB.V3.groom) FB.V3.groom(gid);
+  gOff = () => { offAdd(); offDel(); if (FB.V3.groom) FB.V3.groom(null); };
 }
-</script>
-</body>
-</html>
+
+function gSend() {
+  const text = $('gMsg').value.trim(), now = Date.now();
+  if (!text || !curGid) return;
+  if (now - lastSend < tier().cooldownMs) return showToast('Free Plan: 1 message per 3s. ₹19 Plan has no limit.');
+  lastSend = now; $('gMsg').value = '';
+  FB.firebaseSet(FB.firebasePush(R('group-messages/' + curGid)), { from: state.me.uid, name: state.me.name, text: text.slice(0, 500), ts: now, readBy: { [state.me.uid]: true } }).catch(e => showToast('Send failed: ' + e.message));
+}
+$('gSend').onclick = gSend;
+$('gMsg').addEventListener('keydown', e => { if (e.key === 'Enter') gSend(); });
+
+$('gShare').onclick = () => {
+  const g = myGroups[curGid]; if (!g) return;
+  const url = location.origin + location.pathname + '?join=' + g.code;
+  (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => showToast('Invite link copied'), () => prompt('Invite link:', url));
+};
+
+$('gLeave').onclick = async () => {
+  const g = myGroups[curGid], gid = curGid, uid = state.me.uid;
+  if (!g) return;
+  if (g.role === 'owner') return showToast('Owners cannot leave their group yet');
+  if (!confirm('Leave this group?')) return;
+  try {
+    await FB.firebaseUpdate(ROOT(), { [`group-codes/${g.code}/n`]: FB.firebaseIncrement(-1), [`group-members/${gid}/${uid}`]: null, [`user-groups/${uid}/${gid}`]: null });
+    closeRoom(); showScreen('groups');
+  } catch (e) { showToast(e.message); }
+};
+FB.V3.join = joinByCode; FB.V3.groups = () => myGroups;
+})();
